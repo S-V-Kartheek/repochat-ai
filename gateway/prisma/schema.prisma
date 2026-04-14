@@ -1,0 +1,97 @@
+// RepoTalk — Prisma Schema
+// PostgreSQL via Supabase free tier
+// Run: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")    // Required for Supabase connection pooling
+}
+
+// ─────────────────────────────────────────────
+// User — created/managed by Clerk
+// ─────────────────────────────────────────────
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  repos    Repo[]
+  sessions Session[]
+}
+
+// ─────────────────────────────────────────────
+// Repo — a connected GitHub repository
+// ─────────────────────────────────────────────
+model Repo {
+  id          String   @id @default(cuid())
+  githubUrl   String
+  name        String                          // "owner/repo"
+  languages   String[]                        // ["python", "typescript"]
+  framework   String?                         // "fastapi", "nextjs", etc.
+  conventions String?                         // auto-detected style notes
+  status      RepoStatus @default(PENDING)
+  chunkCount  Int        @default(0)
+  errorMsg    String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions    Session[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum RepoStatus {
+  PENDING
+  INGESTING
+  READY
+  ERROR
+}
+
+// ─────────────────────────────────────────────
+// Session — a conversation about a repo
+// ─────────────────────────────────────────────
+model Session {
+  id        String    @id @default(cuid())
+  title     String?                           // auto-named from first question
+  repoId    String
+  repo      Repo     @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, repoId])
+}
+
+// ─────────────────────────────────────────────
+// Message — a single turn in a session
+// ─────────────────────────────────────────────
+model Message {
+  id         String      @id @default(cuid())
+  role       MessageRole
+  content    String      @db.Text
+  citations  Json?       // [{ file, startLine, endLine, snippet }]
+  ragasScore Json?       // { faithfulness, answerRelevancy, contextPrecision, overall }
+  bookmarked Boolean     @default(false)
+  sessionId  String
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([bookmarked])
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
