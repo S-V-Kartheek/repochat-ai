@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
+import Navbar from "@/components/Navbar";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "RepoTalk — Chat with Any GitHub Repository",
@@ -26,7 +31,17 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
-        <body className={inter.className}>{children}</body>
+        <body className={inter.variable} style={{ fontFamily: "var(--font-sans)" }}>
+          <Navbar />
+          <div
+            style={{
+              paddingTop: "var(--navbar-h)",
+              minHeight: "100vh",
+            }}
+          >
+            {children}
+          </div>
+        </body>
       </html>
     </ClerkProvider>
   );

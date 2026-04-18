@@ -1,15 +1,15 @@
 // RepoTalk — Prisma Schema
-// PostgreSQL via Supabase free tier
-// Run: npx prisma migrate dev --name init
+// Local: SQLite (no setup required for development)
+// Production: switch provider to "postgresql" and set DATABASE_URL
+// Run: npx prisma db push
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")    // Required for Supabase connection pooling
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 // ─────────────────────────────────────────────
@@ -33,10 +33,10 @@ model Repo {
   id          String   @id @default(cuid())
   githubUrl   String
   name        String                          // "owner/repo"
-  languages   String[]                        // ["python", "typescript"]
+  languages   String   @default("py,js,ts")  // comma-separated, e.g. "py,js,ts"
   framework   String?                         // "fastapi", "nextjs", etc.
   conventions String?                         // auto-detected style notes
-  status      RepoStatus @default(PENDING)
+  status      String   @default("PENDING")  // PENDING | INGESTING | READY | ERROR
   chunkCount  Int        @default(0)
   errorMsg    String?
   userId      String
@@ -49,12 +49,7 @@ model Repo {
   @@index([status])
 }
 
-enum RepoStatus {
-  PENDING
-  INGESTING
-  READY
-  ERROR
-}
+
 
 // ─────────────────────────────────────────────
 // Session — a conversation about a repo
@@ -78,10 +73,10 @@ model Session {
 // ─────────────────────────────────────────────
 model Message {
   id         String      @id @default(cuid())
-  role       MessageRole
-  content    String      @db.Text
-  citations  Json?       // [{ file, startLine, endLine, snippet }]
-  ragasScore Json?       // { faithfulness, answerRelevancy, contextPrecision, overall }
+  role       String   // USER | ASSISTANT
+  content    String   // Message text
+  citations  String?  // JSON: [{ file, startLine, endLine, snippet }]
+  ragasScore String?  // JSON: { faithfulness, answerRelevancy, ... }
   bookmarked Boolean     @default(false)
   sessionId  String
   session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -91,7 +86,4 @@ model Message {
   @@index([bookmarked])
 }
 
-enum MessageRole {
-  USER
-  ASSISTANT
-}
+

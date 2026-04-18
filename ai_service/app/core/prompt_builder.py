@@ -7,7 +7,17 @@ Phase 1 — Week 2 implementation.
 """
 
 import re
-from app.core.ast_parser import get_language_for_file
+
+
+LANGUAGE_BY_EXTENSION = {
+    ".py": "python",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".java": "java",
+    ".go": "go",
+}
 
 SYSTEM_PROMPT = """You are RepoTalk, an expert code assistant. You help developers understand codebases.
 
@@ -26,6 +36,14 @@ You will be provided with:
 
 # Max conversation history turns to include (to stay within context window)
 MAX_HISTORY_TURNS = 10
+
+
+def get_language_for_file(file_path: str) -> str | None:
+    """Return a syntax-highlighting hint based on file extension."""
+    dot_index = file_path.rfind(".")
+    if dot_index == -1:
+        return None
+    return LANGUAGE_BY_EXTENSION.get(file_path[dot_index:].lower())
 
 
 def build_query_prompt(

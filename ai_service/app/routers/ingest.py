@@ -24,13 +24,19 @@ async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[st
     try:
         # Give Uvicorn a chance to flush the HTTP 200 OK response to the socket
         await asyncio.sleep(1)
-        INGEST_STATUS[repo_id] = {"status": "cloning", "chunks": 0}
+        INGEST_STATUS[repo_id] = {
+            "status": "cloning", 
+            "current_stage": "Cloning repository...",
+            "total_chunks": 0,
+            "embedded_chunks": 0,
+            "progress_pct": 0.0
+        }
         
         # 1. Clone
         repo_path = repo_cloner.clone_repo(repo_url, repo_id)
         
         # 2. Get files
-        INGEST_STATUS[repo_id]["status"] = "parsing"
+        INGEST_STATUS[repo_id].update({"status": "parsing", "current_stage": "Parsing files..."})
         files = repo_cloner.get_repo_files(repo_path, language_filter=languages)
         
         # Ensure collection exists before doing heavy lifting
@@ -51,28 +57,47 @@ async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[st
             file_chunks = chunker.chunk_file(repo_id, rel_path, content, parsed)
             all_chunks.extend(file_chunks)
             
-        INGEST_STATUS[repo_id] = {"status": "embedding", "chunks": len(all_chunks)}
+        total_chunks = len(all_chunks)
+        INGEST_STATUS[repo_id].update({
+            "status": "embedding",
+            "current_stage": "Embedding and structuring chunks...",
+            "total_chunks": total_chunks
+        })
         
         # 5. Embed & 6. Upsert
         # We batch embedding and upsert to avoid blocking or OOM
         batch_size = 50
-        for i in range(0, len(all_chunks), batch_size):
+        embedded_count = 0
+        for i in range(0, total_chunks, batch_size):
             batch = all_chunks[i:i + batch_size]
             texts = [c.content for c in batch]
-            embs = embedder.embed_texts(texts)
+            
+            # Offload heavy CPU work to a separate thread so event loop remains responsive
+            embs = await asyncio.to_thread(embedder.embed_texts, texts)
             
             await vector_store.upsert_chunks(batch, embs)
+            
+            embedded_count += len(batch)
+            pct = round((embedded_count / total_chunks) * 100, 2) if total_chunks > 0 else 100.0
+            INGEST_STATUS[repo_id].update({
+                "embedded_chunks": embedded_count,
+                "progress_pct": pct
+            })
             
             # Allow event loop to breathe during heavy sync compute
             await asyncio.sleep(0) 
 
         # 7. Cleanup
         repo_cloner.cleanup_repo(repo_id)
-        INGEST_STATUS[repo_id]["status"] = "done"
+        INGEST_STATUS[repo_id].update({
+            "status": "done",
+            "current_stage": "Ingestion completed successfully",
+            "progress_pct": 100.0
+        })
 
     except Exception as e:
         print(f"Ingestion failed for {repo_id}: {e}")
-        INGEST_STATUS[repo_id] = {"status": "error", "error": str(e)}
+        INGEST_STATUS[repo_id].update({"status": "error", "error": str(e), "current_stage": "Failed"})
 
 
 @router.post("/", response_model=IngestResponse, summary="Start repo ingestion")
@@ -82,7 +107,13 @@ async def ingest_repo(request: IngestRequest, background_tasks: BackgroundTasks)
     # repo_id is provided by the gateway, but if missing, fallback to uuid
     repo_id = request.repo_id or str(uuid.uuid4())
     
-    INGEST_STATUS[repo_id] = {"status": "pending", "chunks": 0}
+    INGEST_STATUS[repo_id] = {
+        "status": "pending",
+        "current_stage": "Queued",
+        "total_chunks": 0,
+        "embedded_chunks": 0,
+        "progress_pct": 0.0
+    }
     
     background_tasks.add_task(
         run_ingestion_pipeline, 

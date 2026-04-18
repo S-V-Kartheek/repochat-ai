@@ -21,7 +21,7 @@ import sys
 import uuid
 
 BASE_URL   = "http://localhost:8000"
-TEST_REPO  = "https://github.com/pallets/itsdangerous"  # very small lib for fast testing
+TEST_REPO  = "https://github.com/S-V-Kartheek/-feedback-submission-and-management-system"  # very small lib for fast testing
 REPO_ID    = f"test-{uuid.uuid4().hex[:8]}"
 USER_ID    = "test-user-001"
 SESSION_ID = f"test-session-{uuid.uuid4().hex[:8]}"
@@ -70,7 +70,7 @@ def test_ingest_start():
         "repo_url":  TEST_REPO,
         "repo_id":   REPO_ID,
         "user_id":   USER_ID,
-        "languages": ["py"],       # Must be 'py', not 'python', so cloner searches for '.py'
+        "languages": ["js", "ts", "jsx", "tsx", "py", "java", "sql", "html"],       # Expanded to include web app languages
     }
     try:
         r = httpx.post(f"{BASE_URL}/api/v1/ingest/", json=payload, timeout=30)
@@ -110,12 +110,14 @@ def test_ingest_wait():
             r.raise_for_status()
             data = r.json()
             status = data.get("status", "unknown")
-            chunks = data.get("chunks", 0)
+            stage = data.get("current_stage", "")
+            pct = data.get("progress_pct", 0.0)
+            chunks = data.get("embedded_chunks", data.get("chunks", 0))
             
-            info(f"  [{elapsed:4d}s] status={status!r}  chunks_so_far={chunks}")
+            info(f"  [{elapsed:4d}s] status={status!r} ({pct}%) | stage={stage!r} | embedded_chunks={chunks}")
             
             if status == "done":
-                ok(f"Ingestion complete! ({data.get('chunks', 0)} chunks)")
+                ok(f"Ingestion complete! ({data.get('total_chunks', chunks)} chunks)")
                 return True
             elif status == "error":
                 fail(f"Ingestion failed with error: {data.get('error', 'unknown')}")
@@ -131,8 +133,8 @@ def test_ingest_wait():
 def test_query():
     header("Test 4 — Non-Streaming Query")
     questions = [
-        "Explain what SignatureExpired does.",
-        "How do you sign and unsign a payload?",
+        "What are the technologies used in this project?",
+        "What is the database name created when running the database.sql file?",
     ]
 
     for question in questions:
@@ -177,7 +179,7 @@ def test_query():
 # ---------------------------------------------------------------------------
 def test_streaming_query():
     header("Test 5 — Streaming Query (SSE)")
-    question = "Explain how the URLSafeSerializer works."
+    question = "Explain how the feedback submission process works in this codebase."
     info(f"Q: {question}")
 
     payload = {

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     # --- Embeddings ---
     EMBEDDING_MODEL: str = "nomic-ai/nomic-embed-code-v1"
+    EMBEDDING_DEVICE: str = "cpu"
 
     # --- Qdrant ---
     QDRANT_URL: str = "http://localhost:6333"

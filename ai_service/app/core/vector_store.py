@@ -157,3 +157,39 @@ async def delete_repo_vectors(repo_id: str) -> int:
     except Exception as e:
         print(f"Error deleting vectors for {repo_id}: {e}")
         return 0
+
+
+async def list_repo_chunks(repo_id: str, batch_size: int = 256) -> list[dict]:
+    """
+    Return all stored chunk payloads for a repo.
+    Used by symbol navigation and repo metadata features.
+    """
+    client = await get_qdrant_client()
+    offset = None
+    chunks: list[dict] = []
+
+    while True:
+        records, offset = await client.scroll(
+            collection_name=COLLECTION_NAME,
+            scroll_filter=rest.Filter(
+                must=[
+                    rest.FieldCondition(
+                        key="repo_id",
+                        match=rest.MatchValue(value=repo_id),
+                    )
+                ]
+            ),
+            limit=batch_size,
+            with_payload=True,
+            with_vectors=False,
+            offset=offset,
+        )
+
+        for record in records:
+            if record.payload:
+                chunks.append(dict(record.payload))
+
+        if offset is None:
+            break
+
+    return chunks

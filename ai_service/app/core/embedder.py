@@ -22,7 +22,10 @@ def get_embedding_model() -> SentenceTransformer:
     global _model
     if _model is None:
         import torch
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = settings.EMBEDDING_DEVICE
+        if device == "cuda" and not torch.cuda.is_available():
+            print("⚠️ CUDA requested but not available. Falling back to CPU for embeddings.")
+            device = "cpu"
         # Nomic models highly recommend trust_remote_code=True
         _model = SentenceTransformer(settings.EMBEDDING_MODEL, device=device, trust_remote_code=True)
     return _model
