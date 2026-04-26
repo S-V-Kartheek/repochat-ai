@@ -27,6 +27,7 @@ class Chunk:
     # AST metadata (enriched after parsing)
     function_names: list[str] = field(default_factory=list)
     class_names:    list[str] = field(default_factory=list)
+    method_names:   list[str] = field(default_factory=list)
     imports:        list[str] = field(default_factory=list)
     token_count:    int = 0
 
@@ -70,6 +71,7 @@ def chunk_file(
             # Find symbols bounding this chunk
             funcs = [s.name for s in symbols if s.kind == "function" and not (s.end_line < start_line or s.start_line > line_num - 1)]
             classes = [s.name for s in symbols if s.kind == "class" and not (s.end_line < start_line or s.start_line > line_num - 1)]
+            methods = [s.name for s in symbols if s.kind == "method" and not (s.end_line < start_line or s.start_line > line_num - 1)]
             
             chunks.append(Chunk(
                 chunk_id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"{repo_id}_{file_path}_{chunk_idx}")),
@@ -81,6 +83,7 @@ def chunk_file(
                 end_line=line_num - 1,
                 function_names=funcs,
                 class_names=classes,
+                method_names=methods,
                 token_count=current_tokens
             ))
             chunk_idx += 1
@@ -100,6 +103,7 @@ def chunk_file(
         content = "".join(current_chunk_lines)
         funcs = [s.name for s in symbols if s.kind == "function" and not (s.end_line < start_line or s.start_line > len(lines))]
         classes = [s.name for s in symbols if s.kind == "class" and not (s.end_line < start_line or s.start_line > len(lines))]
+        methods = [s.name for s in symbols if s.kind == "method" and not (s.end_line < start_line or s.start_line > len(lines))]
         chunks.append(Chunk(
             chunk_id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"{repo_id}_{file_path}_{chunk_idx}")),
             repo_id=repo_id,
@@ -110,6 +114,7 @@ def chunk_file(
             end_line=len(lines),
             function_names=funcs,
             class_names=classes,
+            method_names=methods,
             token_count=current_tokens
         ))
 

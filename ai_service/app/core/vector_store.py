@@ -14,8 +14,36 @@ from app.core.chunker import Chunk
 # Collection Config
 # ---------------------------------------------------------------------------
 COLLECTION_NAME = settings.QDRANT_COLLECTION
-VECTOR_SIZE = 768          # nomic-embed-code-v1 output dimension
 DISTANCE = rest.Distance.COSINE
+
+def get_vector_size() -> int:
+    from app.core.embedder import get_embedding_model
+    model = get_embedding_model()
+    return model.get_sentence_embedding_dimension() or 768
+
+
+def _extract_vector_size(vectors_config: object) -> int | None:
+    """
+    Safely extract vector size from Qdrant collection config.
+    Handles both single-vector and named-vector configurations.
+    """
+    if vectors_config is None:
+        return None
+
+    # Common case: single unnamed vector config
+    size = getattr(vectors_config, "size", None)
+    if isinstance(size, int):
+        return size
+
+    # Named vectors may come back as dict-like
+    if isinstance(vectors_config, dict) and vectors_config:
+        first = next(iter(vectors_config.values()))
+        named_size = getattr(first, "size", None)
+        if isinstance(named_size, int):
+            return named_size
+
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Client (singleton)
@@ -44,17 +72,44 @@ async def ensure_collection_exists() -> None:
     """
     client = await get_qdrant_client()
     collections = await client.get_collections()
+    expected_size = get_vector_size()
     
     if not any(c.name == COLLECTION_NAME for c in collections.collections):
         await client.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=rest.VectorParams(
-                size=VECTOR_SIZE,
+                size=expected_size,
                 distance=DISTANCE
             )
         )
         # Create payload indexes for filtering
         await client.create_payload_index(COLLECTION_NAME, field_name="repo_id", field_schema=rest.PayloadSchemaType.KEYWORD)
+        return
+
+    # Collection exists: verify dimensions match the active embedding model.
+    # If dimensions differ (e.g., fallback model switched 768 -> 384), recreate
+    # the collection to prevent hard failures during upsert/search.
+    collection_info = await client.get_collection(COLLECTION_NAME)
+    actual_size = _extract_vector_size(collection_info.config.params.vectors)
+
+    if actual_size is not None and actual_size != expected_size:
+        print(
+            f"⚠️ Qdrant vector size mismatch for '{COLLECTION_NAME}': "
+            f"existing={actual_size}, expected={expected_size}. Recreating collection."
+        )
+        await client.delete_collection(collection_name=COLLECTION_NAME)
+        await client.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=rest.VectorParams(
+                size=expected_size,
+                distance=DISTANCE,
+            ),
+        )
+        await client.create_payload_index(
+            COLLECTION_NAME,
+            field_name="repo_id",
+            field_schema=rest.PayloadSchemaType.KEYWORD,
+        )
 
 
 async def upsert_chunks(chunks: list[Chunk], embeddings: list[list[float]]) -> int:
@@ -77,6 +132,7 @@ async def upsert_chunks(chunks: list[Chunk], embeddings: list[list[float]]) -> i
                 "end_line": c.end_line,
                 "function_names": c.function_names,
                 "class_names": c.class_names,
+                "method_names": c.method_names,
                 "imports": c.imports,
                 "content": c.content,
             }
@@ -131,7 +187,8 @@ async def hybrid_search(
             "content": r.payload["content"],
             "score": r.score,
             "function_names": r.payload.get("function_names", []),
-            "class_names": r.payload.get("class_names", [])
+            "class_names": r.payload.get("class_names", []),
+            "method_names": r.payload.get("method_names", [])
         }
         for r in results
     ]

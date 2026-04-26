@@ -1,0 +1,30 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python tempfile leftovers (created at runtime, not needed in image)
+tmp*/
+temp*/
+
+# Cloned repos / model cache (handled by Docker volumes)
+tmp/cloned_repos/
+repos_cache/
+.model_cache/
+
+# Test / CI artifacts
+htmlcov/
+.coverage
+*.log
+
+# Editor
+.vscode/
+.idea/

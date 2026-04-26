@@ -59,9 +59,9 @@ export interface Citation {
 
 export interface RagasScore {
   faithfulness?: number;
-  answerRelevancy?: number;
-  contextPrecision?: number;
-  overall?: number;
+  answer_relevancy?: number;
+  context_precision?: number;
+  overall?: string;
 }
 
 export interface Message {
@@ -73,6 +73,33 @@ export interface Message {
   bookmarked: boolean;
   sessionId: string;
   createdAt: string;
+}
+
+export interface RepoFileNode {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  children: RepoFileNode[];
+}
+
+export interface RepoFileTreeResponse {
+  repo_id: string;
+  tree: RepoFileNode[];
+}
+
+export interface RepoFileContent {
+  repo_id: string;
+  path: string;
+  language: string | null;
+  content: string;
+}
+
+export interface RepoSymbol {
+  name: string;
+  kind: string;
+  filePath: string;
+  line: number;
+  endLine: number;
 }
 
 // ── API Response shapes ────────────────────────────────────────────────────────

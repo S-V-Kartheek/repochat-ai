@@ -7,17 +7,15 @@ import {
   useEffect,
   useMemo,
   useReducer,
-  useRef,
   type ReactNode,
 } from "react";
-import type { Citation } from "@/lib/types";
+import { useAuth } from "@clerk/nextjs";
+import { createApiClient } from "@/lib/api";
+import type { Citation, RepoSymbol } from "@/lib/types";
 import {
   initialRepoExplorerState,
-  MOCK_SYMBOLS,
-  parseSymbolsMockMode,
   repoExplorerReducer,
   type RepoExplorerState,
-  type SymbolsMockMode,
 } from "@/lib/repoExplorer";
 
 const XL_BREAKPOINT = 1280;
@@ -29,131 +27,151 @@ function shouldAutoOpenSheet(): boolean {
 
 interface RepoWorkspaceContextValue {
   explorer: RepoExplorerState;
-  symbolsMockMode: SymbolsMockMode;
   openCitation: (citation: Citation) => void;
   selectFilePath: (path: string) => void;
-  selectSymbol: (symbol: import("@/lib/repoExplorer").RepoSymbol) => void;
+  selectSymbol: (symbol: RepoSymbol) => void;
   setActiveTab: (tab: RepoExplorerState["activeTab"]) => void;
   setContextSheetOpen: (open: boolean) => void;
   clearCodeView: () => void;
 }
 
-const RepoWorkspaceContext = createContext<RepoWorkspaceContextValue | null>(
-  null
-);
+const RepoWorkspaceContext = createContext<RepoWorkspaceContextValue | null>(null);
 
 export function RepoWorkspaceProvider({
   children,
-  symbolsMockMode: symbolsMockModeProp,
+  repoId,
 }: {
   children: ReactNode;
-  /** When omitted, reads NEXT_PUBLIC_REPO_EXPLORER_SYMBOLS_MOCK */
-  symbolsMockMode?: SymbolsMockMode;
+  repoId: string;
 }) {
-  const symbolsMockMode =
-    symbolsMockModeProp ??
-    parseSymbolsMockMode(process.env.NEXT_PUBLIC_REPO_EXPLORER_SYMBOLS_MOCK);
-
+  const { getToken } = useAuth();
+  const api = useMemo(() => createApiClient(getToken), [getToken]);
   const [explorer, dispatch] = useReducer(
     repoExplorerReducer,
     undefined,
     initialRepoExplorerState
   );
 
-  const mockStarted = useRef(false);
-
   useEffect(() => {
-    mockStarted.current = false;
-  }, [symbolsMockMode]);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (mockStarted.current) return;
-    mockStarted.current = true;
+    const loadTree = async () => {
+      dispatch({
+        type: "SET_TREE_STATE",
+        loadState: "loading",
+        tree: [],
+        error: null,
+      });
 
-    const run = async () => {
-      switch (symbolsMockMode) {
-        case "live": {
-          dispatch({
-            type: "SET_SYMBOLS_STATE",
-            loadState: "loading",
-            symbols: [],
-            error: null,
-          });
-          await new Promise((r) => setTimeout(r, 280));
-          dispatch({
-            type: "SET_SYMBOLS_STATE",
-            loadState: "empty",
-            symbols: [],
-            error: null,
-          });
-          break;
-        }
-        case "loading": {
-          dispatch({
-            type: "SET_SYMBOLS_STATE",
-            loadState: "loading",
-            symbols: [],
-            error: null,
-          });
-          break;
-        }
-        case "empty": {
-          dispatch({
-            type: "SET_SYMBOLS_STATE",
-            loadState: "loading",
-            symbols: [],
-            error: null,
-          });
-          await new Promise((r) => setTimeout(r, 500));
-          dispatch({
-            type: "SET_SYMBOLS_STATE",
-            loadState: "empty",
-            symbols: [],
-            error: null,
-          });
-          break;
-        }
-        case "error": {
-          dispatch({
-            type: "SET_SYMBOLS_STATE",
-            loadState: "loading",
-            symbols: [],
-            error: null,
-          });
-          await new Promise((r) => setTimeout(r, 450));
-          dispatch({
-            type: "SET_SYMBOLS_STATE",
-            loadState: "error",
-            symbols: [],
-            error: "Symbol index is not available for this repository yet.",
-          });
-          break;
-        }
-        case "ready": {
-          dispatch({
-            type: "SET_SYMBOLS_STATE",
-            loadState: "loading",
-            symbols: [],
-            error: null,
-          });
-          await new Promise((r) => setTimeout(r, 400));
-          dispatch({
-            type: "SET_SYMBOLS_STATE",
-            loadState: "ready",
-            symbols: MOCK_SYMBOLS,
-            error: null,
-          });
-          break;
-        }
-        default: {
-          const _exhaustive: never = symbolsMockMode;
-          return _exhaustive;
-        }
+      try {
+        const response = await api.repos.getTree(repoId);
+        if (cancelled) return;
+        dispatch({
+          type: "SET_TREE_STATE",
+          loadState: response.tree.length > 0 ? "ready" : "empty",
+          tree: response.tree,
+          error: null,
+        });
+      } catch (error: unknown) {
+        if (cancelled) return;
+        dispatch({
+          type: "SET_TREE_STATE",
+          loadState: "error",
+          tree: [],
+          error: error instanceof Error ? error.message : "Failed to load files",
+        });
       }
     };
 
-    void run();
-  }, [symbolsMockMode]);
+    void loadTree();
+    return () => {
+      cancelled = true;
+    };
+  }, [api.repos, repoId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSymbols = async () => {
+      dispatch({
+        type: "SET_SYMBOLS_STATE",
+        loadState: "loading",
+        symbols: [],
+        error: null,
+      });
+
+      try {
+        const symbols = await api.repos.getSymbols(repoId);
+        if (cancelled) return;
+        dispatch({
+          type: "SET_SYMBOLS_STATE",
+          loadState: symbols.length > 0 ? "ready" : "empty",
+          symbols,
+          error: null,
+        });
+      } catch (error: unknown) {
+        if (cancelled) return;
+        dispatch({
+          type: "SET_SYMBOLS_STATE",
+          loadState: "error",
+          symbols: [],
+          error: error instanceof Error ? error.message : "Failed to load symbols",
+        });
+      }
+    };
+
+    void loadSymbols();
+    return () => {
+      cancelled = true;
+    };
+  }, [api.repos, repoId]);
+
+  useEffect(() => {
+    if (!explorer.selectedFilePath || explorer.codeDisplayMode === "none") {
+      dispatch({
+        type: "SET_FILE_STATE",
+        loadState: explorer.codeDisplayMode === "none" ? "idle" : "empty",
+        fileContent: null,
+        error: null,
+      });
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadFile = async () => {
+      dispatch({
+        type: "SET_FILE_STATE",
+        loadState: "loading",
+        fileContent: null,
+        error: null,
+      });
+
+      try {
+        const file = await api.repos.getFile(repoId, explorer.selectedFilePath!);
+        if (cancelled) return;
+        dispatch({
+          type: "SET_FILE_STATE",
+          loadState: "ready",
+          fileContent: file,
+          error: null,
+        });
+      } catch (error: unknown) {
+        if (cancelled) return;
+        dispatch({
+          type: "SET_FILE_STATE",
+          loadState: "error",
+          fileContent: null,
+          error: error instanceof Error ? error.message : "Failed to load file",
+        });
+      }
+    };
+
+    void loadFile();
+    return () => {
+      cancelled = true;
+    };
+  }, [api.repos, repoId, explorer.selectedFilePath, explorer.codeDisplayMode]);
 
   const openCitation = useCallback((citation: Citation) => {
     dispatch({ type: "OPEN_CITATION", citation });
@@ -169,15 +187,12 @@ export function RepoWorkspaceProvider({
     }
   }, []);
 
-  const selectSymbol = useCallback(
-    (symbol: import("@/lib/repoExplorer").RepoSymbol) => {
-      dispatch({ type: "SELECT_SYMBOL", symbol });
-      if (shouldAutoOpenSheet()) {
-        dispatch({ type: "SET_SHEET_OPEN", open: true });
-      }
-    },
-    []
-  );
+  const selectSymbol = useCallback((symbol: RepoSymbol) => {
+    dispatch({ type: "SELECT_SYMBOL", symbol });
+    if (shouldAutoOpenSheet()) {
+      dispatch({ type: "SET_SHEET_OPEN", open: true });
+    }
+  }, []);
 
   const setActiveTab = useCallback((tab: RepoExplorerState["activeTab"]) => {
     dispatch({ type: "SET_TAB", tab });
@@ -194,7 +209,6 @@ export function RepoWorkspaceProvider({
   const value = useMemo(
     () => ({
       explorer,
-      symbolsMockMode,
       openCitation,
       selectFilePath,
       selectSymbol,
@@ -204,7 +218,6 @@ export function RepoWorkspaceProvider({
     }),
     [
       explorer,
-      symbolsMockMode,
       openCitation,
       selectFilePath,
       selectSymbol,

@@ -87,8 +87,6 @@ async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[st
             # Allow event loop to breathe during heavy sync compute
             await asyncio.sleep(0) 
 
-        # 7. Cleanup
-        repo_cloner.cleanup_repo(repo_id)
         INGEST_STATUS[repo_id].update({
             "status": "done",
             "current_stage": "Ingestion completed successfully",
@@ -142,4 +140,5 @@ async def get_ingestion_status(repo_id: str):
 async def delete_repo_vectors(repo_id: str, user_id: str):
     """Delete all Qdrant vectors associated with a repo_id."""
     count = await vector_store.delete_repo_vectors(repo_id)
-    return {"message": "Vectors deleted", "repo_id": repo_id, "deleted": count}
+    repo_cloner.cleanup_repo(repo_id)
+    return {"message": "Vectors and cached repo deleted", "repo_id": repo_id, "deleted": count}

@@ -80,23 +80,49 @@ function IngestionProgress({
   const api = createApiClient(getToken);
 
   useEffect(() => {
+    const stopPolling = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+
     const poll = async () => {
       try {
+        const token = await getToken();
+        if (!token) {
+          stopPolling();
+          setError("Authentication expired. Please sign in again.");
+          return;
+        }
+
         const s = await api.repos.getStatus(repoId);
         setStatus(s);
         if (s.status === "done" || s.status === "error") {
-          if (intervalRef.current) clearInterval(intervalRef.current);
+          stopPolling();
           void onDone(s);
         }
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Status check failed");
+        const message = e instanceof Error ? e.message : "Status check failed";
+        setError(message);
+
+        // Avoid endless network spam when auth/session is invalid or repo no longer exists.
+        const normalized = message.toLowerCase();
+        if (
+          normalized.includes("unauthorized") ||
+          normalized.includes("http 401") ||
+          normalized.includes("repo not found") ||
+          normalized.includes("http 404")
+        ) {
+          stopPolling();
+        }
       }
     };
 
     poll();
     intervalRef.current = setInterval(poll, 3000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [repoId]); // eslint-disable-line
+    return () => { stopPolling(); };
+  }, [getToken, repoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) return <p className="text-sm" style={{ color: "var(--error)" }}>{error}</p>;
   if (!status) return <p className="text-sm" style={{ color: "var(--text-muted)" }}>Starting...</p>;
@@ -172,6 +198,9 @@ export default function IngestPage() {
 
     try {
       const res = await api.repos.create(url.trim(), languages);
+      if (res.status === "error") {
+        throw new Error(res.message || "Failed to start ingestion");
+      }
       setUrl("");
       setIngestingRepoId(res.repoId);
       await fetchRepos();
@@ -229,6 +258,7 @@ export default function IngestPage() {
               className="btn btn-ghost btn-sm"
               title="Refresh"
               aria-label="Refresh repos"
+              suppressHydrationWarning
             >
               <RefreshCw size={13} />
             </button>
@@ -284,12 +314,22 @@ export default function IngestPage() {
                     <div className="mt-1.5">
                       <RepoStatusBadge status={repo.status} chunkCount={repo.chunkCount} />
                     </div>
+                    {repo.status === "ERROR" && repo.errorMsg && (
+                      <p
+                        className="mt-2 text-xs line-clamp-2"
+                        style={{ color: "var(--error)" }}
+                        title={repo.errorMsg}
+                      >
+                        {repo.errorMsg}
+                      </p>
+                    )}
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDelete(repo.id); }}
                     className="btn btn-ghost btn-sm opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                     disabled={deletingId === repo.id}
                     aria-label={`Delete ${repo.name}`}
+                    suppressHydrationWarning
                   >
                     {deletingId === repo.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
                   </button>
@@ -322,6 +362,7 @@ export default function IngestPage() {
                 onChange={(e) => setUrl(e.target.value)}
                 required
                 disabled={submitting}
+                suppressHydrationWarning
               />
             </div>
 
@@ -342,6 +383,7 @@ export default function IngestPage() {
                         borderColor: active ? "#bcd1ff" : "var(--border)",
                       }}
                       aria-pressed={active}
+                      suppressHydrationWarning
                     >
                       {opt.label}
                     </button>
@@ -364,6 +406,7 @@ export default function IngestPage() {
               type="submit"
               className="btn btn-primary w-full md:w-auto"
               disabled={submitting || !url.trim()}
+              suppressHydrationWarning
             >
               {submitting ? (
                 <><Loader2 size={16} className="animate-spin" /> Starting Ingestion...</>
@@ -391,20 +434,41 @@ export default function IngestPage() {
                 repoId={ingestingRepoId}
                 getToken={getToken}
                 onDone={async (status) => {
-                  await fetchRepos();
+                  if (status.status !== "done") {
+                    setIngestingRepoId(null);
+                    await fetchRepos();
+                    return;
+                  }
 
-                  if (status.status === "done") {
+                  // If done, we retry a few times to ensure Gateway has synced the "READY" state
+                  let attempts = 0;
+                  const maxAttempts = 5;
+
+                  const checkAndRedirect = async () => {
                     try {
                       const repo = await api.repos.get(ingestingRepoId);
                       if (repo.status === "READY") {
                         router.push(`/chat/${ingestingRepoId}`);
-                        return;
+                        return true;
                       }
-                    } catch {
-                      // Fall through and clear the progress card.
+                    } catch (e) {
+                      console.error("Redirect check failed:", e);
+                    }
+                    return false;
+                  };
+
+                  while (attempts < maxAttempts) {
+                    const isReady = await checkAndRedirect();
+                    if (isReady) return;
+                    
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                      await new Promise((resolve) => setTimeout(resolve, 1000 * attempts)); // Exponential-ish backoff
                     }
                   }
 
+                  // If still not ready after retries, just refresh the list and clear progress
+                  await fetchRepos();
                   setIngestingRepoId(null);
                 }}
               />
@@ -427,11 +491,21 @@ export default function IngestPage() {
                   onClick={() => { if (repo.status === "READY") router.push(`/chat/${repo.id}`); }}
                   role="button"
                   tabIndex={0}
+                  suppressHydrationWarning
                 >
                   <GitBranch size={16} style={{ color: "var(--text-muted)" }} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate" style={{ color: "var(--text)" }}>{repo.name}</p>
                     <RepoStatusBadge status={repo.status} chunkCount={repo.chunkCount} />
+                    {repo.status === "ERROR" && repo.errorMsg && (
+                      <p
+                        className="mt-2 text-xs line-clamp-2"
+                        style={{ color: "var(--error)" }}
+                        title={repo.errorMsg}
+                      >
+                        {repo.errorMsg}
+                      </p>
+                    )}
                   </div>
                   {repo.status === "READY" && <ChevronRight size={16} style={{ color: "var(--text-faint)" }} />}
                 </div>

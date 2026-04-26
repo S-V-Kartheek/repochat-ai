@@ -64,6 +64,33 @@ export interface GatewayCitation {
   snippet: string;
 }
 
+export interface AiRepoFileNode {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  children: AiRepoFileNode[];
+}
+
+export interface AiRepoFileTreeResponse {
+  repo_id: string;
+  tree: AiRepoFileNode[];
+}
+
+export interface AiRepoFileContentResponse {
+  repo_id: string;
+  path: string;
+  language: string | null;
+  content: string;
+}
+
+export interface AiSymbolResult {
+  name: string;
+  kind: string;
+  file: string;
+  start_line: number;
+  end_line: number;
+}
+
 type UnknownCitation = Partial<GatewayCitation> & {
   start_line?: number;
   end_line?: number;
@@ -125,6 +152,30 @@ export async function queryAI(
   payload: AiQueryRequest
 ): Promise<AiQueryResponse> {
   const res = await aiClient.post<AiQueryResponse>("/api/v1/query/", payload);
+  return res.data;
+}
+
+export async function getRepoTree(
+  repoId: string
+): Promise<AiRepoFileTreeResponse> {
+  const res = await aiClient.get<AiRepoFileTreeResponse>(`/api/v1/repos/${repoId}/tree`);
+  return res.data;
+}
+
+export async function getRepoFile(
+  repoId: string,
+  path: string
+): Promise<AiRepoFileContentResponse> {
+  const res = await aiClient.get<AiRepoFileContentResponse>(`/api/v1/repos/${repoId}/file`, {
+    params: { path },
+  });
+  return res.data;
+}
+
+export async function getRepoSymbols(
+  repoId: string
+): Promise<AiSymbolResult[]> {
+  const res = await aiClient.get<AiSymbolResult[]>(`/api/v1/symbols/${repoId}/all`);
   return res.data;
 }
 

@@ -80,27 +80,41 @@ def parse_file(file_path: str, source_code: str) -> ParsedFile:
         if node_type == "function_definition":
             name_node = node.child_by_field_name("name")
             if name_node:
-                symbols.append(Symbol(name=name_node.text.decode("utf8"), kind="function", file=file_path, start_line=node.start_point[0] + 1, end_line=node.end_point[0] + 1))
+                # In Python, we can check if the function is inside a class to decide kind
+                kind = "method" if node.parent and node.parent.type == "block" and node.parent.parent and node.parent.parent.type == "class_definition" else "function"
+                symbols.append(Symbol(name=name_node.text.decode("utf8"), kind=kind, file=file_path, start_line=node.start_point[0] + 1, end_line=node.end_point[0] + 1))
         elif node_type == "class_definition":
             name_node = node.child_by_field_name("name")
             if name_node:
                 symbols.append(Symbol(name=name_node.text.decode("utf8"), kind="class", file=file_path, start_line=node.start_point[0] + 1, end_line=node.end_point[0] + 1))
         
         # JS / TS
-        elif node_type in ["function_declaration", "method_definition"]:
+        elif node_type == "function_declaration":
             name_node = node.child_by_field_name("name")
             if name_node:
                 symbols.append(Symbol(name=name_node.text.decode("utf8"), kind="function", file=file_path, start_line=node.start_point[0] + 1, end_line=node.end_point[0] + 1))
-        elif node_type == "class_declaration":
+        elif node_type == "method_definition":
+            name_node = node.child_by_field_name("name")
+            if name_node:
+                symbols.append(Symbol(name=name_node.text.decode("utf8"), kind="method", file=file_path, start_line=node.start_point[0] + 1, end_line=node.end_point[0] + 1))
+        elif node_type in ["class_declaration", "class"]:
             name_node = node.child_by_field_name("name")
             if name_node:
                 symbols.append(Symbol(name=name_node.text.decode("utf8"), kind="class", file=file_path, start_line=node.start_point[0] + 1, end_line=node.end_point[0] + 1))
                 
         # Java / Go
-        elif node_type in ["method_declaration"]:
+        elif node_type == "function_declaration": # Go
+            name_node = node.child_by_field_name("name")
+            if name_node:
+                symbols.append(Symbol(name=name_node.text.decode("utf8"), kind="function", file=file_path, start_line=node.start_point[0] + 1, end_line=node.end_point[0] + 1))
+        elif node_type in ["method_declaration"]: # Java and Go
             name_node = node.child_by_field_name("name")
             if name_node:
                 symbols.append(Symbol(name=name_node.text.decode("utf8"), kind="method", file=file_path, start_line=node.start_point[0] + 1, end_line=node.end_point[0] + 1))
+        elif node_type in ["class_declaration"]: # Java
+            name_node = node.child_by_field_name("name")
+            if name_node:
+                symbols.append(Symbol(name=name_node.text.decode("utf8"), kind="class", file=file_path, start_line=node.start_point[0] + 1, end_line=node.end_point[0] + 1))
                 
         # Traverse children
         for child in node.children:

@@ -12,6 +12,9 @@ import type {
   CreateRepoResponse,
   CreateSessionResponse,
   IngestStatus,
+  RepoFileTreeResponse,
+  RepoFileContent,
+  RepoSymbol,
 } from "./types";
 
 const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:4000";
@@ -66,6 +69,37 @@ export function createApiClient(getToken: () => Promise<string | null>) {
       getStatus: (repoId: string) =>
         apiFetch<IngestStatus>(`/api/repos/${repoId}/status`, getToken),
 
+      getTree: (repoId: string) =>
+        apiFetch<RepoFileTreeResponse>(`/api/repos/${repoId}/tree`, getToken),
+
+      getFile: (repoId: string, path: string) =>
+        apiFetch<RepoFileContent>(
+          `/api/repos/${repoId}/file?path=${encodeURIComponent(path)}`,
+          getToken
+        ),
+
+      getSymbols: async (repoId: string) => {
+        const raw = await apiFetch<
+          Array<{
+            name: string;
+            kind: string;
+            file: string;
+            start_line: number;
+            end_line: number;
+          }>
+        >(`/api/repos/${repoId}/symbols`, getToken);
+
+        return raw.map(
+          (symbol): RepoSymbol => ({
+            name: symbol.name,
+            kind: symbol.kind,
+            filePath: symbol.file,
+            line: symbol.start_line,
+            endLine: symbol.end_line,
+          })
+        );
+      },
+
       delete: (repoId: string) =>
         apiFetch<{ deleted: boolean }>(`/api/repos/${repoId}`, getToken, {
           method: "DELETE",
@@ -77,6 +111,12 @@ export function createApiClient(getToken: () => Promise<string | null>) {
     sessions: {
       list: (repoId: string) =>
         apiFetch<Session[]>(`/api/sessions?repoId=${repoId}`, getToken),
+
+      search: (repoId: string, query: string) =>
+        apiFetch<Session[]>(
+          `/api/sessions/search?repoId=${encodeURIComponent(repoId)}&q=${encodeURIComponent(query)}`,
+          getToken
+        ),
 
       get: (sessionId: string) =>
         apiFetch<Session>(`/api/sessions/${sessionId}`, getToken),
@@ -153,6 +193,37 @@ export function createApiClient(getToken: () => Promise<string | null>) {
 
         return res.body;
       },
+    },
+
+    // ── Eval ─────────────────────────────────────────────────────────────────
+
+    eval: {
+      getDashboard: (repoId: string) =>
+        apiFetch<any>(`/api/eval/dashboard/${repoId}`, getToken),
+
+      score: (
+        messageId: string,
+        question: string,
+        answer: string,
+        contexts: string[],
+        repoId: string
+      ) =>
+        apiFetch<any>("/api/eval/score", getToken, {
+          method: "POST",
+          body: JSON.stringify({ messageId, question, answer, contexts, repoId }),
+        }),
+
+      queueScore: (
+        messageId: string,
+        question: string,
+        answer: string,
+        contexts: string[],
+        repoId: string
+      ) =>
+        apiFetch<any>("/api/eval/queue", getToken, {
+          method: "POST",
+          body: JSON.stringify({ messageId, question, answer, contexts, repoId }),
+        }),
     },
   };
 }

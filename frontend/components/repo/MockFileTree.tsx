@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronRight, ChevronDown, Folder, File } from "lucide-react";
-import type { MockTreeNode } from "@/lib/repoExplorer";
+import type { RepoFileNode } from "@/lib/types";
 
 function TreeRow({
   node,
@@ -10,7 +10,7 @@ function TreeRow({
   onSelect,
   selectedPath,
 }: {
-  node: MockTreeNode;
+  node: RepoFileNode;
   depth: number;
   onSelect: (path: string) => void;
   selectedPath: string | null;
@@ -74,7 +74,7 @@ export default function MockFileTree({
   selectedPath,
   onSelectPath,
 }: {
-  roots: MockTreeNode[];
+  roots: RepoFileNode[];
   selectedPath: string | null;
   onSelectPath: (path: string) => void;
 }) {

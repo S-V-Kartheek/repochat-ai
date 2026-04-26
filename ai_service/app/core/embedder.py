@@ -26,8 +26,24 @@ def get_embedding_model() -> SentenceTransformer:
         if device == "cuda" and not torch.cuda.is_available():
             print("⚠️ CUDA requested but not available. Falling back to CPU for embeddings.")
             device = "cpu"
-        # Nomic models highly recommend trust_remote_code=True
-        _model = SentenceTransformer(settings.EMBEDDING_MODEL, device=device, trust_remote_code=True)
+        
+        # Primary model
+        primary_model = settings.EMBEDDING_MODEL
+        # Fallback model (very reliable, small, doesn't require trust_remote_code typically)
+        fallback_model = "all-MiniLM-L6-v2"
+        
+        try:
+            print(f"Loading primary embedding model: {primary_model}...")
+            _model = SentenceTransformer(primary_model, device=device, trust_remote_code=True)
+        except Exception as e:
+            print(f"❌ Failed to load primary model '{primary_model}'. Error: {e}")
+            print(f"⚠️ Falling back to alternative model: {fallback_model}...")
+            try:
+                _model = SentenceTransformer(fallback_model, device=device)
+            except Exception as fallback_e:
+                print(f"❌ Failed to load fallback model '{fallback_model}'. Error: {fallback_e}")
+                raise RuntimeError(f"Could not load any embedding models. Primary error: {e}, Fallback error: {fallback_e}")
+            
     return _model
 
 

@@ -4,8 +4,6 @@
 # This brings up every service in one command.
 # =============================================================
 
-version: "3.9"
-
 services:
   # ------------------------------------------------------------------
   # Qdrant Vector Database
@@ -20,7 +18,7 @@ services:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      test: ["CMD-SHELL", "kill -0 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -29,6 +27,7 @@ services:
   # Redis (for caching and rate limiting)
   # Dev uses local Redis; prod uses Upstash Redis (no container needed)
   # ------------------------------------------------------------------
+  
   redis:
     image: redis:7-alpine
     container_name: repotalk_redis
@@ -58,6 +57,7 @@ services:
     environment:
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_API_KEY=
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--loop", "asyncio"]
     volumes:
       - ./ai_service:/app             # hot-reload in dev
       - ai_model_cache:/app/.model_cache
@@ -92,7 +92,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -111,6 +111,7 @@ services:
     env_file:
       - .env
     environment:
+      - PORT=3000
       - NEXT_PUBLIC_GATEWAY_URL=http://localhost:4000
     volumes:
       - ./frontend:/app               # hot-reload
