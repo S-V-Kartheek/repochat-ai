@@ -11,6 +11,7 @@ import { requireAuth } from "../middleware/auth";
 import { rateLimiter } from "../middleware/rateLimit";
 import { prisma, ensureUser } from "../services/db";
 import { aiClient, normalizeCitations, queryAI } from "../services/aiProxy";
+import { enqueueEvalJob } from "../services/evalQueue";
 
 export const chatRoutes = Router();
 const HISTORY_LIMIT = 10;
@@ -119,6 +120,14 @@ chatRoutes.post("/query", requireAuth, rateLimiter, async (req, res) => {
     },
   });
 
+  enqueueEvalJob({
+    messageId: savedMsg.id,
+    question,
+    answer: aiResponse.answer,
+    contexts: normalizedCitations.map((citation) => citation.snippet).filter(Boolean),
+    repoId,
+  });
+
   res.json({
     answer:      aiResponse.answer,
     citations:   normalizedCitations,
@@ -187,23 +196,40 @@ chatRoutes.post("/stream", requireAuth, rateLimiter, async (req, res) => {
     let buffer = "";
     let fullAnswer = "";
     let savedDone = false;
+    let streamHadError = false;
+    let streamErrorMessage = "";
 
     const finishStream = async (rawCitations: unknown) => {
       if (savedDone) return;
       savedDone = true;
 
       const citations = normalizeCitations(rawCitations);
+      const safeAnswer = fullAnswer.trim().length > 0
+        ? fullAnswer
+        : (streamHadError
+          ? "I ran into an issue while generating the response. Please try again."
+          : "I could not generate a complete answer for this request. Please try again.");
+
       const savedAssistant = await prisma.message.create({
         data: {
           role: "ASSISTANT",
-          content: fullAnswer,
+          content: safeAnswer,
           citations: JSON.stringify(citations),
           sessionId,
         },
       });
 
+      enqueueEvalJob({
+        messageId: savedAssistant.id,
+        question,
+        answer: safeAnswer,
+        contexts: citations.map((citation) => citation.snippet).filter(Boolean),
+        repoId,
+      });
+
       res.write(`data: ${JSON.stringify({
         done: true,
+        answer: safeAnswer,
         citations,
         session_id: sessionId,
         message_id: savedAssistant.id,
@@ -236,7 +262,9 @@ chatRoutes.post("/stream", requireAuth, rateLimiter, async (req, res) => {
           }
 
           if (event.error) {
-            res.write(`data: ${JSON.stringify({ error: event.error })}\n\n`);
+            streamHadError = true;
+            streamErrorMessage = typeof event.error === "string" ? event.error : "Stream failed";
+            res.write(`data: ${JSON.stringify({ error: streamErrorMessage })}\n\n`);
             continue;
           }
 

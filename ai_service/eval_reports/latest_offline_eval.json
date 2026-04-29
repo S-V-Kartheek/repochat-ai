@@ -1,0 +1,46 @@
+{
+  "generated_at": "2026-04-25T09:56:38.434673+00:00",
+  "dataset_path": "eval_datasets/react_20_questions.json",
+  "repo_id": "offline-react-benchmark",
+  "summary": {
+    "count": 3,
+    "avg_faithfulness": 0.0,
+    "avg_answer_relevancy": 0.0,
+    "avg_context_precision": 0.0,
+    "grade_counts": {
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "unknown": 3
+    }
+  },
+  "results": [
+    {
+      "faithfulness": 0.0,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.0,
+      "overall": "unknown",
+      "message_id": "react-001",
+      "error": "Timed out after 45.0s",
+      "question": "What is React primarily used for?"
+    },
+    {
+      "faithfulness": 0.0,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.0,
+      "overall": "unknown",
+      "message_id": "react-002",
+      "error": "Timed out after 45.0s",
+      "question": "What does JSX represent in a React app?"
+    },
+    {
+      "faithfulness": 0.0,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.0,
+      "overall": "unknown",
+      "message_id": "react-003",
+      "error": "Timed out after 45.0s",
+      "question": "Why are keys needed when rendering lists?"
+    }
+  ]
+}

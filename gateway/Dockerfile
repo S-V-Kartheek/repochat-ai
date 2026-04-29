@@ -22,16 +22,17 @@ RUN npm run build
 # ─── Runtime ───────────────────────────────────────────────
 FROM node:20-alpine AS runtime
 
-# Security: non-root user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Security: non-root user + OpenSSL (required by Prisma's musl query engine)
+RUN apk add --no-cache openssl ca-certificates \
+ && addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
 # Copy built artifacts
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/package.json ./
+COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
+COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:appgroup /app/prisma ./prisma
+COPY --from=builder --chown=appuser:appgroup /app/package.json ./
 
 USER appuser
 

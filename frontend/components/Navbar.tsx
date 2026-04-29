@@ -96,7 +96,7 @@ export default function Navbar() {
             }}
           >
             <Sparkles size={12} style={{ color: "var(--accent)" }} />
-            Premium UI Mode
+            .
           </div>
 
           <SignedOut>

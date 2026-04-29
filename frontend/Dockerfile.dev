@@ -1,0 +1,32 @@
+# =============================================================
+# RepoTalk — Frontend Dev Dockerfile
+# Runs Next.js in development mode with hot-reload.
+# Used by docker-compose.yml for local development only.
+# In production, the frontend is deployed on Vercel.
+# =============================================================
+
+FROM node:20-alpine
+
+# Install dependencies for native modules (e.g. sharp)
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+# Copy only manifests first so Docker cache is reused on code-only changes
+COPY package.json package-lock.json ./
+
+# Install all deps (including devDependencies needed for `next dev`)
+RUN npm ci
+
+# Copy the rest of the source (overridden by the volume mount in dev)
+COPY . .
+
+# Next.js dev server — listens on 0.0.0.0 so Docker can forward the port
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+# Enable Next.js hot-reload over Docker volume mount
+ENV WATCHPACK_POLLING=true
+
+CMD ["npm", "run", "dev"]

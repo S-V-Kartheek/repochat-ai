@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = "llama3.1:8b"
 
     # --- Embeddings ---
-    EMBEDDING_MODEL: str = "nomic-ai/nomic-embed-code-v1"
+    EMBEDDING_MODEL: str = "nomic-ai/nomic-embed-text-v1.5"
     EMBEDDING_DEVICE: str = "cpu"
 
     # --- Qdrant ---

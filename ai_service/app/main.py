@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import ingest, query, symbols, persona, pr, eval as eval_router
+from app.routers import ingest, query, symbols, repo_files, persona, pr, eval as eval_router
 from app.core.vector_store import ensure_collection_exists
 from app.core.llm_provider import get_provider_info
 
@@ -67,6 +67,7 @@ app.add_middleware(
 app.include_router(ingest.router,  prefix="/api/v1/ingest",  tags=["Ingestion"])
 app.include_router(query.router,   prefix="/api/v1/query",   tags=["Query"])
 app.include_router(symbols.router, prefix="/api/v1/symbols", tags=["Symbols"])
+app.include_router(repo_files.router, prefix="/api/v1/repos", tags=["Repo Explorer"])
 app.include_router(persona.router, prefix="/api/v1/persona", tags=["Persona"])
 app.include_router(pr.router,      prefix="/api/v1/pr",      tags=["PR Summarizer"])
 app.include_router(eval_router.router, prefix="/api/v1/eval", tags=["Evaluation"])

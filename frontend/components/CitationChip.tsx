@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import type { Citation } from "@/lib/types";
 import { X, FileCode } from "lucide-react";
 
@@ -87,16 +87,30 @@ export function SnippetModal({
 interface CitationChipProps {
   citation: Citation;
   index: number;
+  /** When set, opens the workspace code viewer instead of the snippet modal. */
+  onOpenCitation?: (citation: Citation) => void;
 }
 
-export default function CitationChip({ citation, index }: CitationChipProps) {
+export default function CitationChip({
+  citation,
+  index,
+  onOpenCitation,
+}: CitationChipProps) {
   const [open, setOpen] = useState(false);
   const fileName = citation.file.split("/").pop() ?? citation.file;
+
+  const handleOpen = () => {
+    if (onOpenCitation) {
+      onOpenCitation(citation);
+    } else {
+      setOpen(true);
+    }
+  };
 
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all"
         style={{
           background: "#ecf3ff",
@@ -120,7 +134,7 @@ export default function CitationChip({ citation, index }: CitationChipProps) {
         <span style={{ color: "var(--text-faint)" }}>:{citation.startLine}</span>
       </button>
 
-      {open && (
+      {open && !onOpenCitation && (
         <SnippetModal citation={citation} onClose={() => setOpen(false)} />
       )}
     </>
