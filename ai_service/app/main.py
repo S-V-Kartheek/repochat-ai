@@ -1,17 +1,18 @@
 """
-RepoTalk AI Service — FastAPI Application Entry Point
+RepoTalk AI Service - FastAPI Application Entry Point
 
 Routers mounted here:
-  /health          → health check
-  /api/v1/ingest   → repo ingestion pipeline
-  /api/v1/query    → retrieval + generation
-  /api/v1/symbols  → AST symbol lookup
-  /api/v1/persona  → repo profiling + onboarding guide
-  /api/v1/pr       → PR summarizer
-  /api/v1/eval     → RAGAS evaluation
+  /health          -> health check
+  /api/v1/ingest   -> repo ingestion pipeline
+  /api/v1/query    -> retrieval + generation
+  /api/v1/symbols  -> AST symbol lookup
+  /api/v1/persona  -> repo profiling + onboarding guide
+  /api/v1/pr       -> PR summarizer
+  /api/v1/eval     -> RAGAS evaluation
 """
 
 from contextlib import asynccontextmanager
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -22,18 +23,20 @@ from app.core.llm_provider import get_provider_info
 
 
 # ---------------------------------------------------------------------------
-# Lifespan — runs on startup / shutdown
+# Lifespan - runs on startup / shutdown
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: ensure Qdrant collection is ready
     try:
-        await ensure_collection_exists()
-        print("✅ Qdrant collection ready")
+        await asyncio.wait_for(ensure_collection_exists(), timeout=8)
+        print("[OK] Qdrant collection ready")
+    except asyncio.TimeoutError:
+        print("[WARN] Qdrant collection init timed out at startup (will retry lazily).")
     except Exception as e:
-        print(f"⚠️  Qdrant connection failed (will retry on first request): {e}")
+        print(f"[WARN] Qdrant connection failed (will retry on first request): {e}")
 
-    print(f"✅ LLM provider: {settings.LLM_PROVIDER} → {get_provider_info()['model']}")
+    print(f"[OK] LLM provider: {settings.LLM_PROVIDER} -> {get_provider_info()['model']}")
     yield
     # Shutdown: nothing to clean up (yet)
 
@@ -44,7 +47,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="RAG pipeline powering RepoTalk — chat with any GitHub repo.",
+    description="RAG pipeline powering RepoTalk - chat with any GitHub repo.",
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
     lifespan=lifespan,

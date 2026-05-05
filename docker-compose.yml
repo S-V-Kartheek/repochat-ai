@@ -18,7 +18,7 @@ services:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "kill -0 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -65,9 +65,11 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -89,6 +91,8 @@ services:
       - REDIS_URL=redis://redis:6379
     depends_on:
       ai_service:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -117,7 +121,8 @@ services:
       - ./frontend:/app               # hot-reload
       - frontend_node_modules:/app/node_modules
     depends_on:
-      - gateway
+      gateway:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

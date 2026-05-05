@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Send, Loader2, BookmarkCheck, Bookmark, AlertTriangle } from "lucide-react";
+import { Send, Loader2, BookmarkCheck, Bookmark, AlertTriangle, Sparkles, MessageSquare } from "lucide-react";
 import { createApiClient } from "@/lib/api";
 import StreamingText from "./StreamingText";
 import CitationChip from "./CitationChip";
@@ -277,7 +277,7 @@ function StreamingBubble({
   sessionId: string;
   question: string;
   getToken: () => Promise<string | null>;
-  onDone: (result: { answer: string; citations: Citation[]; messageId?: string }) => void;
+  onDone: (result: { answer: string; citations: Citation[]; messageId?: string; followUps?: string[] }) => void;
   onError: (message: string) => void;
 }) {
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -348,6 +348,7 @@ export default function ChatPanel({
   const [streaming, setStreaming] = useState(false);
   const [streamingQuestion, setStreamingQuestion] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [followUps, setFollowUps] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const submitLockRef = useRef(false);
@@ -393,10 +394,12 @@ export default function ChatPanel({
     answer,
     citations,
     messageId,
+    followUps: newFollowUps,
   }: {
     answer: string;
     citations: Citation[];
     messageId?: string;
+    followUps?: string[];
   }) => {
     const currentQuestion = streamingQuestion;
     const safeAnswer = answer.trim()
@@ -417,6 +420,9 @@ export default function ChatPanel({
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, assistantMsg]);
+
+    // Set follow-ups from the LLM response
+    setFollowUps(newFollowUps || []);
 
     // Refresh parent session state to replace optimistic user message and keep
     // IDs/bookmarks in sync with DB.
@@ -452,6 +458,24 @@ export default function ChatPanel({
       e.preventDefault();
       handleSubmit();
     }
+  };
+
+  const handleFollowUpClick = (question: string) => {
+    setInput(question);
+    setFollowUps([]);
+    // Auto-submit after a small delay
+    setTimeout(() => {
+      const form = document.querySelector("form");
+      if (form) form.requestSubmit();
+    }, 50);
+  };
+
+  const handleSummarize = () => {
+    setInput("Summarize this entire conversation session. Include the main topics discussed and key findings.");
+    setTimeout(() => {
+      const form = document.querySelector("form");
+      if (form) form.requestSubmit();
+    }, 50);
   };
 
   const isEmpty = messages.length === 0 && !streaming;
@@ -572,6 +596,44 @@ export default function ChatPanel({
           </div>
         )}
         <div ref={bottomRef} />
+
+        {/* Follow-up suggestions */}
+        {followUps.length > 0 && !streaming && (
+          <div className="px-2 pb-2 slide-up">
+            <p
+              className="text-[11px] font-semibold uppercase tracking-wider mb-2"
+              style={{ color: "var(--text-faint)" }}
+            >
+              Suggested follow-ups
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {followUps.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleFollowUpClick(q)}
+                  className="text-left text-sm px-3 py-2 rounded-lg transition-all"
+                  style={{
+                    background: "var(--surface-2)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "var(--accent)";
+                    e.currentTarget.style.color = "var(--accent)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "var(--border)";
+                    e.currentTarget.style.color = "var(--text-muted)";
+                  }}
+                >
+                  <Sparkles size={11} className="inline mr-1.5" style={{ opacity: 0.6 }} />
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Input area */}
@@ -624,8 +686,19 @@ export default function ChatPanel({
             )}
           </button>
         </form>
-        <p className="text-[11px] mt-2" style={{ color: "var(--text-faint)" }}>
-          Enter to send · Shift+Enter for new line
+        <p className="text-[11px] mt-2 flex items-center justify-between" style={{ color: "var(--text-faint)" }}>
+          <span>Enter to send · Shift+Enter for new line</span>
+          {messages.length > 2 && (
+            <button
+              onClick={handleSummarize}
+              disabled={streaming}
+              className="flex items-center gap-1 hover:underline"
+              style={{ color: "var(--accent)", cursor: "pointer", background: "none", border: "none", padding: 0, font: "inherit", fontSize: "inherit" }}
+            >
+              <MessageSquare size={11} />
+              Summarize session
+            </button>
+          )}
         </p>
       </div>
     </div>

@@ -15,6 +15,10 @@ import type {
   RepoFileTreeResponse,
   RepoFileContent,
   RepoSymbol,
+  PersonaResponse,
+  PRResponse,
+  ProfileResponse,
+  ProfileUsageResponse,
 } from "./types";
 
 const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:4000";
@@ -224,6 +228,47 @@ export function createApiClient(getToken: () => Promise<string | null>) {
           method: "POST",
           body: JSON.stringify({ messageId, question, answer, contexts, repoId }),
         }),
+    },
+
+    // ── Persona ───────────────────────────────────────────────────────────────
+
+    persona: {
+      get: (repoId: string) =>
+        apiFetch<PersonaResponse>(`/api/persona/${repoId}`, getToken),
+
+      generate: (repoId: string) =>
+        apiFetch<PersonaResponse>("/api/persona", getToken, {
+          method: "POST",
+          body: JSON.stringify({ repoId }),
+        }),
+
+      regenerate: async (repoId: string) => {
+        await apiFetch<{ deleted: boolean }>(`/api/persona/${repoId}`, getToken, {
+          method: "DELETE",
+        });
+        return apiFetch<PersonaResponse>("/api/persona", getToken, {
+          method: "POST",
+          body: JSON.stringify({ repoId }),
+        });
+      },
+    },
+
+    // ── PR Summarizer ─────────────────────────────────────────────────────────
+
+    pr: {
+      summarize: (prUrl: string, repoId?: string) =>
+        apiFetch<PRResponse>("/api/pr/summarize", getToken, {
+          method: "POST",
+          body: JSON.stringify({ prUrl, repoId: repoId || "" }),
+        }),
+    },
+
+    // ── Profile / Settings ──────────────────────────────────────────────────
+
+    profile: {
+      get: () => apiFetch<ProfileResponse>("/api/profile", getToken),
+      usage: () =>
+        apiFetch<ProfileUsageResponse>("/api/profile/usage", getToken),
     },
   };
 }

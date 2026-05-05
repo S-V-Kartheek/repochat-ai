@@ -55,6 +55,7 @@ export interface AiQueryResponse {
     snippet: string;
   }>;
   model_used: string;
+  follow_ups?: string[];
 }
 
 export interface GatewayCitation {

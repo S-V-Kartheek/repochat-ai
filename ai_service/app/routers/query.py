@@ -15,7 +15,7 @@ from openai import AsyncOpenAI, RateLimitError
 from app.models.schemas import QueryRequest, QueryResponse, Citation
 from app.core.embedder import embed_query
 from app.core.vector_store import hybrid_search
-from app.core.prompt_builder import build_query_prompt, extract_citations
+from app.core.prompt_builder import build_query_prompt, extract_citations, extract_follow_ups, build_context_aware_query
 from app.core.llm_provider import get_llm_client, get_model_name
 from app.config import settings
 
@@ -84,7 +84,8 @@ async def query_repo(request: QueryRequest):
     """
     try:
         # 1. Embed the question
-        query_vector = embed_query(request.question)
+        enhanced_query = build_context_aware_query(request.question, request.history)
+        query_vector = embed_query(enhanced_query)
 
         # 2. Retrieve from Qdrant
         retrieved_chunks = await hybrid_search(
@@ -155,11 +156,14 @@ async def query_repo(request: QueryRequest):
                         model_used=f"{get_model_name()} (rate-limited)",
                     )
 
-        answer = response.choices[0].message.content or ""
-        if not answer.strip():
-            answer = "I could not generate a complete answer for this question. Please try rephrasing and ask again."
+        raw_answer = response.choices[0].message.content or ""
+        if not raw_answer.strip():
+            raw_answer = "I could not generate a complete answer for this question. Please try rephrasing and ask again."
 
-        # 5. Extract citations
+        # 5. Extract follow-ups and clean answer
+        answer, follow_ups = extract_follow_ups(raw_answer)
+
+        # 6. Extract citations
         raw_citations = extract_citations(answer, used_chunks)
         citations = [
             Citation(
@@ -177,6 +181,7 @@ async def query_repo(request: QueryRequest):
             citations=citations,
             session_id=request.session_id,
             model_used=model_used,
+            follow_ups=follow_ups,
         )
 
     except Exception as e:
@@ -198,7 +203,8 @@ async def query_repo_stream(request: QueryRequest):
     async def event_generator():
         try:
             # 1. Embed
-            query_vector = embed_query(request.question)
+            enhanced_query = build_context_aware_query(request.question, request.history)
+            query_vector = embed_query(enhanced_query)
 
             # 2. Retrieve
             retrieved_chunks = await hybrid_search(
@@ -278,8 +284,11 @@ async def query_repo_stream(request: QueryRequest):
                 full_answer = "I could not generate a complete answer for this question. Please try rephrasing and ask again."
                 yield f"data: {json.dumps({'token': full_answer})}\n\n"
 
-            # 5. Extract citations after full answer is assembled
-            raw_citations = extract_citations(full_answer, used_chunks)
+            # 5. Extract follow-ups and clean answer
+            clean_answer, follow_ups = extract_follow_ups(full_answer)
+
+            # 6. Extract citations after full answer is assembled
+            raw_citations = extract_citations(clean_answer, used_chunks)
             citations_payload = [
                 {
                     "file": c["file"],
@@ -291,8 +300,8 @@ async def query_repo_stream(request: QueryRequest):
                 for c in raw_citations
             ]
 
-            # Final SSE event with citations
-            yield f"data: {json.dumps({'done': True, 'citations': citations_payload, 'session_id': request.session_id, 'model_used': model_used})}\n\n"
+            # Final SSE event with citations and follow-up suggestions
+            yield f"data: {json.dumps({'done': True, 'citations': citations_payload, 'session_id': request.session_id, 'model_used': model_used, 'follow_ups': follow_ups})}\n\n"
 
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"

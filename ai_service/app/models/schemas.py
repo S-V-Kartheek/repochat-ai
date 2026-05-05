@@ -54,6 +54,7 @@ class QueryResponse(BaseModel):
     citations: list[Citation]
     session_id: str
     model_used: str
+    follow_ups: list[str] = Field(default_factory=list, description="3 suggested follow-up questions")
 
 
 # ---------------------------------------------------------------------------

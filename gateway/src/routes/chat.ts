@@ -19,11 +19,57 @@ const HISTORY_LIMIT = 10;
 // ── Schemas ────────────────────────────────────────────────────────────────────
 
 const QuerySchema = z.object({
-  repoId:    z.string().min(1),
-  question:  z.string().min(1).max(2000),
+  repoId: z.string().min(1),
+  question: z.string().min(1).max(2000),
   sessionId: z.string().min(1),
-  topK:      z.number().int().min(1).max(20).optional().default(5),
+  topK: z.number().int().min(1).max(20).optional().default(5),
 });
+
+function stripFollowUps(answer: string): { cleanAnswer: string; followUps: string[] } {
+  const marker = "---FOLLOW_UPS---";
+  const idx = answer.indexOf(marker);
+  if (idx === -1) return { cleanAnswer: answer.trim(), followUps: [] };
+
+  const cleanAnswer = answer.slice(0, idx).trim();
+  const suffix = answer.slice(idx + marker.length);
+  const followUps = suffix
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "))
+    .map((line) => line.slice(2).trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 3);
+
+  return { cleanAnswer, followUps };
+}
+
+function sanitizeFollowUps(followUps: unknown): string[] {
+  if (!Array.isArray(followUps)) return [];
+  const cleaned = followUps
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .slice(0, 6);
+
+  const unique: string[] = [];
+  for (const suggestion of cleaned) {
+    if (unique.some((existing) => existing.toLowerCase() === suggestion.toLowerCase())) {
+      continue;
+    }
+    unique.push(suggestion);
+    if (unique.length >= 3) break;
+  }
+
+  return unique;
+}
+
+function defaultFollowUps(): string[] {
+  return [
+    "Can you walk me through the exact call flow for this behavior?",
+    "What edge cases or failure paths should I verify in this part of the code?",
+    "Which files and functions should I read next to understand this deeper?",
+  ];
+}
 
 async function loadRecentHistory(sessionId: string) {
   const messages = await prisma.message.findMany({
@@ -109,12 +155,23 @@ chatRoutes.post("/query", requireAuth, rateLimiter, async (req, res) => {
     top_k: topK,
   });
 
+  const parsedAnswer = stripFollowUps(aiResponse.answer);
+  const safeAnswer = parsedAnswer.cleanAnswer.trim().length > 0
+    ? parsedAnswer.cleanAnswer
+    : aiResponse.answer.trim();
+  const followUps = sanitizeFollowUps(aiResponse.follow_ups);
+  const finalFollowUps = followUps.length > 0
+    ? followUps
+    : parsedAnswer.followUps.length > 0
+      ? parsedAnswer.followUps
+      : defaultFollowUps();
+
   // Save assistant message with citations
   const normalizedCitations = normalizeCitations(aiResponse.citations);
   const savedMsg = await prisma.message.create({
     data: {
       role: "ASSISTANT",
-      content: aiResponse.answer,
+      content: safeAnswer,
       citations: JSON.stringify(normalizedCitations),
       sessionId,
     },
@@ -123,17 +180,18 @@ chatRoutes.post("/query", requireAuth, rateLimiter, async (req, res) => {
   enqueueEvalJob({
     messageId: savedMsg.id,
     question,
-    answer: aiResponse.answer,
+    answer: safeAnswer,
     contexts: normalizedCitations.map((citation) => citation.snippet).filter(Boolean),
     repoId,
   });
 
   res.json({
-    answer:      aiResponse.answer,
-    citations:   normalizedCitations,
-    model_used:  aiResponse.model_used,
-    session_id:  sessionId,
-    message_id:  savedMsg.id,
+    answer: safeAnswer,
+    citations: normalizedCitations,
+    model_used: aiResponse.model_used,
+    session_id: sessionId,
+    message_id: savedMsg.id,
+    follow_ups: finalFollowUps,
   });
 });
 
@@ -198,17 +256,30 @@ chatRoutes.post("/stream", requireAuth, rateLimiter, async (req, res) => {
     let savedDone = false;
     let streamHadError = false;
     let streamErrorMessage = "";
+    let cleanAnswerFromDoneEvent = "";
+    let followUpsFromDoneEvent: string[] = [];
 
     const finishStream = async (rawCitations: unknown) => {
       if (savedDone) return;
       savedDone = true;
 
       const citations = normalizeCitations(rawCitations);
-      const safeAnswer = fullAnswer.trim().length > 0
-        ? fullAnswer
-        : (streamHadError
-          ? "I ran into an issue while generating the response. Please try again."
-          : "I could not generate a complete answer for this request. Please try again.");
+      const parsed = stripFollowUps(fullAnswer);
+      const normalizedAnswerFromDoneEvent = cleanAnswerFromDoneEvent.trim();
+      const cleanedFullAnswer = parsed.cleanAnswer;
+      const safeAnswer = normalizedAnswerFromDoneEvent.length > 0
+        ? normalizedAnswerFromDoneEvent
+        : cleanedFullAnswer.length > 0
+          ? cleanedFullAnswer
+          : (streamHadError
+            ? "I ran into an issue while generating the response. Please try again."
+            : "I could not generate a complete answer for this request. Please try again.");
+      const followUps = sanitizeFollowUps(followUpsFromDoneEvent);
+      const finalFollowUps = followUps.length > 0
+        ? followUps
+        : parsed.followUps.length > 0
+          ? parsed.followUps
+          : defaultFollowUps();
 
       const savedAssistant = await prisma.message.create({
         data: {
@@ -233,6 +304,7 @@ chatRoutes.post("/stream", requireAuth, rateLimiter, async (req, res) => {
         citations,
         session_id: sessionId,
         message_id: savedAssistant.id,
+        follow_ups: finalFollowUps,
       })}\n\n`);
     };
 
@@ -252,6 +324,8 @@ chatRoutes.post("/stream", requireAuth, rateLimiter, async (req, res) => {
             token?: string;
             done?: boolean;
             citations?: unknown;
+            answer?: string;
+            follow_ups?: string[];
             error?: string;
           };
 
@@ -269,6 +343,10 @@ chatRoutes.post("/stream", requireAuth, rateLimiter, async (req, res) => {
           }
 
           if (event.done) {
+            cleanAnswerFromDoneEvent = typeof event.answer === "string" ? event.answer : "";
+            followUpsFromDoneEvent = Array.isArray(event.follow_ups)
+              ? event.follow_ups.filter((q): q is string => typeof q === "string").slice(0, 3)
+              : [];
             await finishStream(event.citations);
           }
         } catch {

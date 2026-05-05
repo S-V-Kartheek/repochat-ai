@@ -8,7 +8,7 @@ interface StreamingTextProps {
   sessionId: string;
   question: string;
   getToken: () => Promise<string | null>;
-  onDone: (result: { answer: string; citations: Citation[]; messageId?: string }) => void;
+  onDone: (result: { answer: string; citations: Citation[]; messageId?: string; followUps?: string[] }) => void;
   onError?: (err: string) => void;
 }
 
@@ -117,6 +117,7 @@ export default function StreamingText({
             finalCitations = Array.isArray(event.citations)
               ? event.citations.map(normalizeCitation)
               : [];
+            const followUps: string[] = Array.isArray(event.follow_ups) ? event.follow_ups : [];
             const finalAnswer =
               fullAnswer.trim().length > 0
                 ? fullAnswer
@@ -129,6 +130,7 @@ export default function StreamingText({
               answer: finalAnswer,
               citations: finalCitations,
               messageId: typeof event.message_id === "string" ? event.message_id : undefined,
+              followUps,
             });
           }
         }

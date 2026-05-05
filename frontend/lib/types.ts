@@ -110,6 +110,7 @@ export interface ChatQueryResponse {
   model_used: string;
   session_id?: string;
   message_id?: string;
+  follow_ups?: string[];
 }
 
 export interface CreateSessionResponse {
@@ -123,4 +124,60 @@ export interface CreateRepoResponse {
   repoId: string;
   status: string;
   message: string;
+}
+
+// ── Persona (Phase 3 Week 7) ──────────────────────────────────────────────────
+
+export interface PersonaResponse {
+  repo_id: string;
+  dominant_language: string;
+  stack: string[];
+  frameworks: string[];
+  architecture_style: string;
+  conventions: string;
+  key_contributors: string[];
+  onboarding_guide: string;
+  architecture_overview: string;
+  cached: boolean;
+}
+
+// ── PR Summarizer (Phase 3 Week 8) ────────────────────────────────────────────
+
+export interface PRResponse {
+  summary: string;
+  impact_warnings: string[];
+  changed_functions: string[];
+  diff_overview: string;
+}
+
+// ── Profile / Usage (Phase 4 Week 10) ─────────────────────────────────────────
+export interface ProfileResponse {
+  user: {
+    id: string;
+    email: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+  };
+  repos_count: number;
+  sessions_count: number;
+  messages_count: number;
+  bookmarked_count: number;
+  recent_activity: {
+    last_message_at: string | null;
+    last_session_at: string | null;
+    last_repo_update_at: string | null;
+  };
+}
+
+export interface ProfileUsageResponse {
+  query_count: number;
+  repos_connected: number;
+  messages_count: number;
+  bookmarked_count: number;
+  rate_limit: {
+    limit: number;
+    remaining: number;
+    reset_at: string;
+    reset_seconds: number;
+  };
 }

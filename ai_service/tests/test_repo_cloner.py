@@ -8,7 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_build_repo_file_tree_returns_nested_project_entries():
-    repo_root = REPO_ROOT / "frontend" / "components"
+    repo_root = (REPO_ROOT / "frontend" / "components").resolve()
 
     tree = build_repo_file_tree(repo_root)
 
@@ -20,14 +20,14 @@ def test_build_repo_file_tree_returns_nested_project_entries():
 
 
 def test_resolve_repo_file_rejects_path_traversal():
-    repo_root = REPO_ROOT / "ai_service" / "app"
+    repo_root = (REPO_ROOT / "ai_service" / "app").resolve()
 
     with pytest.raises(ValueError):
         resolve_repo_file(repo_root, "../requirements.txt")
 
 
 def test_read_repo_file_text_returns_existing_file_contents():
-    repo_root = REPO_ROOT / "frontend" / "components" / "repo"
+    repo_root = (REPO_ROOT / "frontend" / "components" / "repo").resolve()
 
     content = read_repo_file_text(repo_root, "CodeViewerPane.tsx")
 
