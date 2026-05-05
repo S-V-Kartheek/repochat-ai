@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton, SignInButton } from "@clerk/nextjs";
-import { Sparkles, MessageSquare, LayoutDashboard } from "lucide-react";
+import { Sparkles, MessageSquare, LayoutDashboard, GitPullRequest } from "lucide-react";
 
 const NAV_LINKS = [
   { href: "/ingest", label: "Repos", icon: LayoutDashboard },
+  { href: "/pr", label: "PR Summary", icon: GitPullRequest },
 ];
 
 export default function Navbar() {
@@ -96,7 +97,7 @@ export default function Navbar() {
             }}
           >
             <Sparkles size={12} style={{ color: "var(--accent)" }} />
-            Premium UI Mode
+            .
           </div>
 
           <SignedOut>

@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:fresh": "npm run clean && next dev",
     "build": "next build",
     "start": "next start",
+    "clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true});\"",
     "lint": "next lint",
     "format": "prettier --write ."
   },

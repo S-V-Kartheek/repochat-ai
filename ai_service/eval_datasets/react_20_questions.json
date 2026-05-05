@@ -1,0 +1,182 @@
+[
+  {
+    "message_id": "react-001",
+    "question": "What is React primarily used for?",
+    "answer": "React is primarily used to build user interfaces from reusable components.",
+    "contexts": [
+      "React lets you build user interfaces out of individual pieces called components.",
+      "A component can receive inputs and return JSX describing what should appear on screen."
+    ]
+  },
+  {
+    "message_id": "react-002",
+    "question": "What does JSX represent in a React app?",
+    "answer": "JSX is a syntax extension that lets developers describe UI structure in JavaScript.",
+    "contexts": [
+      "JSX allows writing HTML-like syntax directly in JavaScript files.",
+      "React transforms JSX into JavaScript function calls that create UI elements."
+    ]
+  },
+  {
+    "message_id": "react-003",
+    "question": "Why are keys needed when rendering lists?",
+    "answer": "Keys help React identify list items between renders so updates are efficient and correct.",
+    "contexts": [
+      "Keys should be stable identifiers for each item in a list.",
+      "Without keys, React cannot reliably match previous and next children in reconciliation."
+    ]
+  },
+  {
+    "message_id": "react-004",
+    "question": "What does useState do?",
+    "answer": "useState adds local state to a functional component and triggers re-render when state changes.",
+    "contexts": [
+      "useState returns a state value and a setter function.",
+      "Calling the setter schedules React to render the component again with updated state."
+    ]
+  },
+  {
+    "message_id": "react-005",
+    "question": "When should useEffect be used?",
+    "answer": "useEffect should be used for side effects like subscriptions, network calls, and DOM sync.",
+    "contexts": [
+      "Effects run after rendering and can synchronize with systems outside React.",
+      "Dependencies control when an effect re-runs."
+    ]
+  },
+  {
+    "message_id": "react-006",
+    "question": "What does an empty dependency array mean in useEffect?",
+    "answer": "An empty dependency array means the effect runs once after mount and cleanup runs on unmount.",
+    "contexts": [
+      "useEffect with [] executes after the initial render.",
+      "The returned cleanup function executes before unmount."
+    ]
+  },
+  {
+    "message_id": "react-007",
+    "question": "How is component state different from props?",
+    "answer": "Props are inputs passed from parent components, while state is data managed within the component.",
+    "contexts": [
+      "Props are read-only values received by a component.",
+      "State is internal and can be updated with hooks like useState."
+    ]
+  },
+  {
+    "message_id": "react-008",
+    "question": "What problem does useMemo solve?",
+    "answer": "useMemo memoizes expensive computed values so they are recalculated only when dependencies change.",
+    "contexts": [
+      "useMemo caches a calculation result across renders.",
+      "Dependency changes invalidate the memoized value."
+    ]
+  },
+  {
+    "message_id": "react-009",
+    "question": "What is useCallback used for?",
+    "answer": "useCallback memoizes function references to avoid unnecessary child re-renders.",
+    "contexts": [
+      "useCallback returns the same function instance until dependencies change.",
+      "It is useful when passing callbacks to memoized child components."
+    ]
+  },
+  {
+    "message_id": "react-010",
+    "question": "What is the purpose of React.memo?",
+    "answer": "React.memo skips re-rendering a component when its props have not changed.",
+    "contexts": [
+      "React.memo performs a shallow comparison of props by default.",
+      "It can improve performance for pure functional components."
+    ]
+  },
+  {
+    "message_id": "react-011",
+    "question": "What does lifting state up mean?",
+    "answer": "Lifting state up means moving shared state to a common parent so multiple children stay in sync.",
+    "contexts": [
+      "When two components need the same data, place state in their closest common ancestor.",
+      "Children receive the shared state and callbacks via props."
+    ]
+  },
+  {
+    "message_id": "react-012",
+    "question": "What is Context API used for?",
+    "answer": "Context API is used to share values across component trees without prop drilling.",
+    "contexts": [
+      "A Context provider exposes a value to nested components.",
+      "Consumers access that value with useContext."
+    ]
+  },
+  {
+    "message_id": "react-013",
+    "question": "What is reconciliation in React?",
+    "answer": "Reconciliation is React's process of comparing virtual trees to compute minimal UI updates.",
+    "contexts": [
+      "React creates a new virtual tree on render and compares it with the previous one.",
+      "The diff result is applied to the DOM efficiently."
+    ]
+  },
+  {
+    "message_id": "react-014",
+    "question": "Why should state updates be treated as immutable?",
+    "answer": "Immutable updates make changes predictable and allow React to detect updates reliably.",
+    "contexts": [
+      "Mutating existing objects can cause stale or skipped renders.",
+      "Creating new objects/arrays ensures referential changes are visible."
+    ]
+  },
+  {
+    "message_id": "react-015",
+    "question": "What is controlled input in React?",
+    "answer": "A controlled input is an input element whose value is driven by React state.",
+    "contexts": [
+      "The input value comes from state and onChange updates state.",
+      "React becomes the single source of truth for form data."
+    ]
+  },
+  {
+    "message_id": "react-016",
+    "question": "How does conditional rendering work in React?",
+    "answer": "Conditional rendering uses JavaScript conditions to render different UI branches.",
+    "contexts": [
+      "Components can return different JSX based on state or props.",
+      "Patterns include if statements, ternaries, and logical &&."
+    ]
+  },
+  {
+    "message_id": "react-017",
+    "question": "What is a custom hook?",
+    "answer": "A custom hook is a reusable function that encapsulates hook-based stateful logic.",
+    "contexts": [
+      "Custom hooks start with 'use' and can call other hooks.",
+      "They help share logic without changing component hierarchy."
+    ]
+  },
+  {
+    "message_id": "react-018",
+    "question": "What does cleanup in useEffect prevent?",
+    "answer": "Cleanup in useEffect prevents memory leaks and stale subscriptions or timers.",
+    "contexts": [
+      "Effects can return a cleanup function.",
+      "Cleanup runs before re-running the effect and during unmount."
+    ]
+  },
+  {
+    "message_id": "react-019",
+    "question": "What is lazy loading in React?",
+    "answer": "Lazy loading defers loading components until needed, reducing initial bundle size.",
+    "contexts": [
+      "React.lazy supports code splitting for component imports.",
+      "Suspense can show fallback UI while lazy components load."
+    ]
+  },
+  {
+    "message_id": "react-020",
+    "question": "Why is one-way data flow important in React?",
+    "answer": "One-way data flow keeps state changes predictable by passing data downward from parent to child.",
+    "contexts": [
+      "Data is passed from parent components to children via props.",
+      "This model simplifies reasoning, debugging, and testing."
+    ]
+  }
+]

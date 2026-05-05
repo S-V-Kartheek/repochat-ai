@@ -19,6 +19,20 @@ router = APIRouter()
 INGEST_STATUS = {}
 
 
+def _parse_and_chunk_file(repo_id: str, rel_path: str, full_path):
+    """
+    CPU/file-IO heavy parse+chunk step extracted for asyncio.to_thread usage.
+    Returns list[Chunk].
+    """
+    try:
+        content = full_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return []
+
+    parsed = ast_parser.parse_file(rel_path, content)
+    return chunker.chunk_file(repo_id, rel_path, content, parsed)
+
+
 async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[str]):
     """Background task implementing the ingestion pipeline."""
     try:
@@ -33,11 +47,15 @@ async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[st
         }
         
         # 1. Clone
-        repo_path = repo_cloner.clone_repo(repo_url, repo_id)
+        repo_path = await asyncio.to_thread(repo_cloner.clone_repo, repo_url, repo_id)
         
         # 2. Get files
         INGEST_STATUS[repo_id].update({"status": "parsing", "current_stage": "Parsing files..."})
-        files = repo_cloner.get_repo_files(repo_path, language_filter=languages)
+        files = await asyncio.to_thread(
+            repo_cloner.get_repo_files,
+            repo_path,
+            languages,
+        )
         
         # Ensure collection exists before doing heavy lifting
         await vector_store.ensure_collection_exists()
@@ -48,14 +66,15 @@ async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[st
         for file in files:
             full_path = repo_path / file
             rel_path = str(file)
-            try:
-                content = full_path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
-                continue # Skip binary/non-utf8 files
-                
-            parsed = ast_parser.parse_file(rel_path, content)
-            file_chunks = chunker.chunk_file(repo_id, rel_path, content, parsed)
+
+            file_chunks = await asyncio.to_thread(
+                _parse_and_chunk_file,
+                repo_id,
+                rel_path,
+                full_path,
+            )
             all_chunks.extend(file_chunks)
+            await asyncio.sleep(0)
             
         total_chunks = len(all_chunks)
         INGEST_STATUS[repo_id].update({
@@ -87,8 +106,6 @@ async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[st
             # Allow event loop to breathe during heavy sync compute
             await asyncio.sleep(0) 
 
-        # 7. Cleanup
-        repo_cloner.cleanup_repo(repo_id)
         INGEST_STATUS[repo_id].update({
             "status": "done",
             "current_stage": "Ingestion completed successfully",
@@ -142,4 +159,5 @@ async def get_ingestion_status(repo_id: str):
 async def delete_repo_vectors(repo_id: str, user_id: str):
     """Delete all Qdrant vectors associated with a repo_id."""
     count = await vector_store.delete_repo_vectors(repo_id)
-    return {"message": "Vectors deleted", "repo_id": repo_id, "deleted": count}
+    repo_cloner.cleanup_repo(repo_id)
+    return {"message": "Vectors and cached repo deleted", "repo_id": repo_id, "deleted": count}

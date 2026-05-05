@@ -11,7 +11,7 @@ from typing import Optional
 # Ingestion
 # ---------------------------------------------------------------------------
 class IngestRequest(BaseModel):
-    repo_url: str = Field(..., example="https://github.com/tiangolo/fastapi")
+    repo_url: str = Field(..., json_schema_extra={"example": "https://github.com/tiangolo/fastapi"})
     languages: list[str] = Field(
         default=["python", "javascript", "typescript", "java", "go"],
         description="File extensions to include. Leave empty for all supported languages.",
@@ -31,7 +31,7 @@ class IngestResponse(BaseModel):
 # Query
 # ---------------------------------------------------------------------------
 class QueryRequest(BaseModel):
-    question: str = Field(..., example="Where is authentication handled?")
+    question: str = Field(..., json_schema_extra={"example": "Where is authentication handled?"})
     repo_id: str
     session_id: str
     history: list[dict] = Field(
@@ -54,13 +54,14 @@ class QueryResponse(BaseModel):
     citations: list[Citation]
     session_id: str
     model_used: str
+    follow_ups: list[str] = Field(default_factory=list, description="3 suggested follow-up questions")
 
 
 # ---------------------------------------------------------------------------
 # Symbols
 # ---------------------------------------------------------------------------
 class SymbolRequest(BaseModel):
-    symbol_name: str = Field(..., example="authenticate")
+    symbol_name: str = Field(..., json_schema_extra={"example": "authenticate"})
     repo_id: str
 
 
@@ -70,6 +71,31 @@ class SymbolResult(BaseModel):
     file: str
     start_line: int
     end_line: int
+
+
+# ---------------------------------------------------------------------------
+# Repo Explorer
+# ---------------------------------------------------------------------------
+class RepoFileNode(BaseModel):
+    name: str
+    path: str
+    type: str  # "file" | "directory"
+    children: list["RepoFileNode"] = Field(default_factory=list)
+
+
+class RepoFileTreeResponse(BaseModel):
+    repo_id: str
+    tree: list[RepoFileNode]
+
+
+class RepoFileContentResponse(BaseModel):
+    repo_id: str
+    path: str
+    language: Optional[str] = None
+    content: str
+
+
+RepoFileNode.model_rebuild()
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +121,7 @@ class PersonaResponse(BaseModel):
 # PR Summarizer
 # ---------------------------------------------------------------------------
 class PRRequest(BaseModel):
-    pr_url: str = Field(..., example="https://github.com/owner/repo/pull/42")
+    pr_url: str = Field(..., json_schema_extra={"example": "https://github.com/owner/repo/pull/42"})
     repo_id: str
 
 

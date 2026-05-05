@@ -144,15 +144,38 @@ Run on `facebook/react` repository (500+ Q&A pairs):
 | Context Precision | 0.79 |
 | Avg Response Latency | < 3s |
 
+### Offline Week 6 Benchmark (20 Questions)
+
+Dataset file:
+- `ai_service/eval_datasets/react_20_questions.json`
+
+Run offline RAGAS:
+
+```bash
+cd ai_service
+python scripts/run_offline_ragas.py --dataset eval_datasets/react_20_questions.json
+```
+
+Quick smoke run (first 3 rows):
+
+```bash
+cd ai_service
+python scripts/run_offline_ragas.py --dataset eval_datasets/react_20_questions.json --limit 3
+```
+
+Report output:
+- `ai_service/eval_reports/latest_offline_eval.json`
+
+If Groq free-tier rate limits are hit, switch to Ollama for evaluator LLM.
+
 ---
 
 ## 🛣️ Roadmap
 
 - [x] Phase 1: Core RAG pipeline (ingestion + retrieval + generation)
-- [ ] Phase 2: Frontend + persistent chat history
-- [ ] Phase 3: RAGAS evaluation + dashboard
-- [ ] Phase 4: Repo persona + PR summarizer
-- [ ] Phase 5: Security + CI/CD + Docker
+- [x] Phase 2: Frontend + persistent chat history + RAGAS dashboard
+- [ ] Phase 3: Repo persona + PR summarizer
+- [ ] Phase 4: Security + CI/CD + Docker
 
 ---
 

@@ -42,6 +42,19 @@ def iter_symbol_candidates(chunk_payloads: Iterable[dict]) -> list[SymbolResult]
                 )
             )
 
+        for name in payload.get("method_names", []) or []:
+            if not name:
+                continue
+            candidates.append(
+                SymbolResult(
+                    name=str(name),
+                    kind="method",
+                    file=file_path,
+                    start_line=start_line,
+                    end_line=end_line,
+                )
+            )
+
     return candidates
 
 

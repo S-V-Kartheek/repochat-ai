@@ -8,7 +8,7 @@ interface StreamingTextProps {
   sessionId: string;
   question: string;
   getToken: () => Promise<string | null>;
-  onDone: (result: { answer: string; citations: Citation[]; messageId?: string }) => void;
+  onDone: (result: { answer: string; citations: Citation[]; messageId?: string; followUps?: string[] }) => void;
   onError?: (err: string) => void;
 }
 
@@ -78,6 +78,7 @@ export default function StreamingText({
       let buffer = "";
       let fullAnswer = "";
       let finalCitations: Citation[] = [];
+      let sawDoneEvent = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -93,28 +94,54 @@ export default function StreamingText({
           const raw = trimmed.slice(5).trim();
           if (!raw) continue;
 
+          let event: any;
           try {
-            const event = JSON.parse(raw);
-
-            if ("token" in event) {
-              fullAnswer += event.token;
-              setText((prev) => prev + event.token);
-            } else if (event.done) {
-              finalCitations = Array.isArray(event.citations)
-                ? event.citations.map(normalizeCitation)
-                : [];
-              setStreaming(false);
-              onDone({
-                answer: fullAnswer,
-                citations: finalCitations,
-                messageId: typeof event.message_id === "string" ? event.message_id : undefined,
-              });
-            } else if (event.error) {
-              throw new Error(event.error);
-            }
-          } catch (parseErr) {
+            event = JSON.parse(raw);
+          } catch {
             // Ignore non-JSON lines (keep-alive comments etc.)
+            continue;
           }
+
+          if (typeof event.token === "string") {
+            fullAnswer += event.token;
+            setText((prev) => prev + event.token);
+            continue;
+          }
+
+          if (event.error) {
+            throw new Error(typeof event.error === "string" ? event.error : "Stream failed");
+          }
+
+          if (event.done) {
+            sawDoneEvent = true;
+            finalCitations = Array.isArray(event.citations)
+              ? event.citations.map(normalizeCitation)
+              : [];
+            const followUps: string[] = Array.isArray(event.follow_ups) ? event.follow_ups : [];
+            const finalAnswer =
+              fullAnswer.trim().length > 0
+                ? fullAnswer
+                : (typeof event.answer === "string" ? event.answer : "");
+            if (finalAnswer && !fullAnswer) {
+              setText(finalAnswer);
+            }
+            setStreaming(false);
+            onDone({
+              answer: finalAnswer,
+              citations: finalCitations,
+              messageId: typeof event.message_id === "string" ? event.message_id : undefined,
+              followUps,
+            });
+          }
+        }
+      }
+
+      if (!sawDoneEvent) {
+        if (fullAnswer.trim().length > 0) {
+          setStreaming(false);
+          onDone({ answer: fullAnswer, citations: finalCitations });
+        } else {
+          throw new Error("Stream ended before an answer was produced.");
         }
       }
     } catch (err: unknown) {
@@ -126,8 +153,18 @@ export default function StreamingText({
   }, [repoId, sessionId, question, getToken, onDone, onError]);
 
   useEffect(() => {
-    stream();
-    return () => { abortRef.current?.abort(); };
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!cancelled) {
+        void stream();
+      }
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      abortRef.current?.abort();
+    };
   }, [stream]);
 
   return (

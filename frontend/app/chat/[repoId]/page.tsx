@@ -3,18 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import {
-  Plus,
-  Trash2,
-  GitBranch,
-  Loader2,
-  AlertTriangle,
-  MessageSquare,
-  CheckCircle,
-  ArrowLeft,
-} from "lucide-react";
+import { Loader2, AlertTriangle, ArrowLeft } from "lucide-react";
 import { createApiClient } from "@/lib/api";
-import ChatPanel from "@/components/ChatPanel";
+import ChatRepoPageLayout from "@/components/repo/ChatRepoPageLayout";
+import { RepoWorkspaceProvider } from "@/components/repo/RepoWorkspaceContext";
 import type { Repo, Session } from "@/lib/types";
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -31,6 +23,9 @@ export default function ChatPage({ params }: { params: { repoId: string } }) {
   const [error, setError] = useState<string | null>(null);
   const [creatingSession, setCreatingSession] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [sessionSearch, setSessionSearch] = useState("");
+  const [searchingSessions, setSearchingSessions] = useState(false);
+  const [searchedSessions, setSearchedSessions] = useState<Session[] | null>(null);
 
   const api = createApiClient(getToken);
 
@@ -42,10 +37,8 @@ export default function ChatPage({ params }: { params: { repoId: string } }) {
   const init = async () => {
     setLoading(true);
     try {
-      const [r, s] = await Promise.all([
-        api.repos.get(repoId),
-        api.sessions.list(repoId),
-      ]);
+      const r = await api.repos.get(repoId);
+      const s = await api.sessions.list(repoId);
       setRepo(r);
       setSessions(s);
 
@@ -55,7 +48,20 @@ export default function ChatPage({ params }: { params: { repoId: string } }) {
         setActiveSession(full);
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load repo");
+      const message = e instanceof Error ? e.message : "Failed to load repo";
+      const normalized = message.toLowerCase();
+
+      if (normalized.includes("http 401") || normalized.includes("unauthorized")) {
+        router.replace("/sign-in");
+        return;
+      }
+
+      if (normalized.includes("http 404") || normalized.includes("repo not found")) {
+        router.replace("/ingest");
+        return;
+      }
+
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -79,6 +85,33 @@ export default function ChatPage({ params }: { params: { repoId: string } }) {
       }
     }
   };
+
+  useEffect(() => {
+    const q = sessionSearch.trim();
+    if (!q) {
+      setSearchedSessions(null);
+      setSearchingSessions(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setSearchingSessions(true);
+      try {
+        const result = await api.sessions.search(repoId, q);
+        if (!cancelled) setSearchedSessions(result);
+      } catch {
+        if (!cancelled) setSearchedSessions([]);
+      } finally {
+        if (!cancelled) setSearchingSessions(false);
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [repoId, sessionSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNewSession = async () => {
     setCreatingSession(true);
@@ -183,214 +216,26 @@ export default function ChatPage({ params }: { params: { repoId: string } }) {
   }
 
   const lowChunks = repo.chunkCount < 10;
+  const visibleSessions = sessionSearch.trim() ? (searchedSessions ?? []) : sessions;
 
   return (
-    <div
-      className="flex p-4 md:p-6 gap-4 md:gap-5"
-      style={{ height: "calc(100vh - var(--navbar-h))", maxWidth: "1320px", margin: "0 auto" }}
-    >
-      {/* ── Session Sidebar ────────────────────────── */}
-      <aside
-        className="hidden lg:flex flex-col flex-shrink-0"
-        style={{
-          width: "var(--sidebar-w)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg)",
-          background: "var(--surface)",
-          boxShadow: "var(--shadow-sm)",
-        }}
-      >
-        {/* Repo header */}
-        <div
-          className="px-4 py-4 flex-shrink-0"
-          style={{ borderBottom: "1px solid var(--border)" }}
-        >
-          <button
-            onClick={() => router.push("/ingest")}
-            className="flex items-center gap-1.5 mb-3 text-xs font-semibold"
-            style={{ color: "var(--text-faint)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-          >
-            <ArrowLeft size={11} /> All repos
-          </button>
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
-              style={{ background: "var(--accent-muted)" }}
-            >
-              <GitBranch size={13} style={{ color: "var(--accent)" }} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold truncate" style={{ color: "var(--text)" }}>
-                {repo.name.split("/")[1] || repo.name}
-              </p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                {lowChunks ? (
-                  <span className="badge badge-amber">
-                    <AlertTriangle size={9} /> Sparse
-                  </span>
-                ) : (
-                  <span className="badge badge-green">
-                    <CheckCircle size={9} /> {repo.chunkCount} chunks
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* New session */}
-        <div className="px-3 pt-3 pb-2 flex-shrink-0">
-          <button
-            onClick={handleNewSession}
-            disabled={creatingSession}
-            className="btn btn-secondary btn-sm w-full justify-center"
-          >
-            {creatingSession ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Plus size={13} />
-            )}
-            New Chat
-          </button>
-        </div>
-
-        {/* Session list */}
-        <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
-          {sessions.length === 0 ? (
-            <div className="py-8 text-center px-4">
-              <MessageSquare
-                size={22}
-                className="mx-auto mb-2"
-                style={{ color: "var(--text-faint)" }}
-              />
-              <p className="text-xs" style={{ color: "var(--text-faint)" }}>
-                No sessions yet.
-                <br />
-                Start a new chat.
-              </p>
-            </div>
-          ) : (
-            sessions.map((s) => {
-              const active = activeSession?.id === s.id;
-              return (
-                <div
-                  key={s.id}
-                  className="group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors"
-                  style={{
-                    background: active ? "#eff5ff" : "transparent",
-                    border: active ? "1px solid #cdddfb" : "1px solid transparent",
-                  }}
-                  onClick={() => handleSelectSession(s.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleSelectSession(s.id); }}
-                  aria-selected={active}
-                >
-                  <MessageSquare size={12} style={{ color: active ? "var(--accent)" : "var(--text-faint)", flexShrink: 0 }} />
-                  <p
-                    className="text-xs flex-1 min-w-0 truncate"
-                    style={{ color: active ? "var(--text)" : "var(--text-muted)" }}
-                  >
-                    {s.title ?? "New session"}
-                  </p>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDeleteSession(s.id); }}
-                    className="btn btn-ghost btn-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                    disabled={deletingId === s.id}
-                    aria-label="Delete session"
-                    style={{ padding: "2px 4px" }}
-                  >
-                    {deletingId === s.id ? (
-                      <Loader2 size={11} className="animate-spin" />
-                    ) : (
-                      <Trash2 size={11} />
-                    )}
-                  </button>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </aside>
-
-      {/* ── Chat Area ─────────────────────────────── */}
-      <main
-        className="flex-1 flex flex-col min-w-0 overflow-hidden"
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg)",
-          boxShadow: "var(--shadow-sm)",
-        }}
-      >
-        <div className="lg:hidden px-4 py-3 border-b flex items-center gap-2 overflow-x-auto" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
-          <span className="badge badge-gray whitespace-nowrap">
-            <GitBranch size={10} />
-            {repo.name.split("/")[1] || repo.name}
-          </span>
-          <select
-            value={activeSession?.id ?? (sessions[0]?.id ?? "")}
-            onChange={(e) => { if (e.target.value) handleSelectSession(e.target.value); }}
-            className="input"
-            style={{ minWidth: "180px", maxWidth: "260px", height: "34px", paddingTop: "0", paddingBottom: "0" }}
-            aria-label="Select chat session"
-          >
-            {sessions.length === 0 && <option value="">No sessions</option>}
-            {sessions.map((s) => (
-              <option key={s.id} value={s.id}>{s.title ?? "New session"}</option>
-            ))}
-          </select>
-          <button
-            onClick={handleNewSession}
-            className="btn btn-primary btn-sm whitespace-nowrap"
-            disabled={creatingSession}
-          >
-            {creatingSession ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-            New Chat
-          </button>
-        </div>
-
-        {activeSession ? (
-          <ChatPanel
-            repoId={repoId}
-            session={activeSession}
-            lowChunkWarning={lowChunks}
-            onSessionUpdate={refreshSessions}
-          />
-        ) : (
-          /* No session selected state */
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
-              style={{ background: "var(--surface-2)" }}
-            >
-              <MessageSquare size={28} style={{ color: "var(--text-faint)" }} />
-            </div>
-            <h2 className="text-lg font-semibold mb-2">
-              {sessions.length === 0
-                ? "Start your first conversation"
-                : "Select a session"}
-            </h2>
-            <p className="text-sm mb-6 max-w-xs" style={{ color: "var(--text-muted)" }}>
-              {sessions.length === 0
-                ? `${repo.name} is ready. Create a new chat to start asking questions.`
-                : "Choose a past session from the sidebar or start a new one."}
-            </p>
-            <button
-              onClick={handleNewSession}
-              className="btn btn-primary"
-              disabled={creatingSession}
-            >
-              {creatingSession ? (
-                <Loader2 size={15} className="animate-spin" />
-              ) : (
-                <Plus size={15} />
-              )}
-              New Chat
-            </button>
-          </div>
-        )}
-      </main>
-    </div>
+    <RepoWorkspaceProvider repoId={repoId}>
+      <ChatRepoPageLayout
+        repoId={repoId}
+        repo={repo}
+        sessions={visibleSessions}
+        activeSession={activeSession}
+        lowChunks={lowChunks}
+        creatingSession={creatingSession}
+        deletingId={deletingId}
+        sessionSearch={sessionSearch}
+        searchingSessions={searchingSessions}
+        onSessionSearchChange={setSessionSearch}
+        onNewSession={handleNewSession}
+        onSelectSession={handleSelectSession}
+        onDeleteSession={handleDeleteSession}
+        onSessionUpdate={refreshSessions}
+      />
+    </RepoWorkspaceProvider>
   );
 }

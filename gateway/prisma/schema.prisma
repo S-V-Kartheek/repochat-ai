@@ -4,7 +4,8 @@
 // Run: npx prisma db push
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -42,11 +43,31 @@ model Repo {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions    Session[]
+  persona     RepoPersona?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([userId])
   @@index([status])
+}
+
+// ─────────────────────────────────────────────
+// RepoPersona — cached LLM-generated persona
+// ─────────────────────────────────────────────
+model RepoPersona {
+  id                   String   @id @default(cuid())
+  repoId               String   @unique
+  repo                 Repo     @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  dominantLanguage     String
+  stack                String   // JSON array of strings
+  frameworks           String   // JSON array of strings
+  architectureStyle    String
+  conventions          String
+  keyContributors      String   // JSON array of strings
+  onboardingGuide      String   // Markdown
+  architectureOverview String   // Text-based diagram
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 

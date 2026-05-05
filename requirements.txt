@@ -1,0 +1,4 @@
+# Root convenience entrypoint for Python dependencies.
+# The frontend and gateway use npm package manifests instead.
+
+-r ai_service/requirements.txt

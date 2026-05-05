@@ -24,6 +24,8 @@ import { repoRoutes } from "./routes/repos";
 import { chatRoutes } from "./routes/chat";
 import { evalRoutes } from "./routes/eval";
 import { profileRoutes } from "./routes/profile";
+import { personaRoutes } from "./routes/persona";
+import { prRoutes } from "./routes/pr";
 
 dotenv.config({ path: "../.env" });
 
@@ -47,6 +49,8 @@ app.use("/api/repos",    repoRoutes);
 app.use("/api/chat",     chatRoutes);
 app.use("/api/eval",     evalRoutes);
 app.use("/api/profile",  profileRoutes);
+app.use("/api/persona",  personaRoutes);
+app.use("/api/pr",       prRoutes);
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use(errorHandler);

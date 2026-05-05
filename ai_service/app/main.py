@@ -1,39 +1,42 @@
 """
-RepoTalk AI Service — FastAPI Application Entry Point
+RepoTalk AI Service - FastAPI Application Entry Point
 
 Routers mounted here:
-  /health          → health check
-  /api/v1/ingest   → repo ingestion pipeline
-  /api/v1/query    → retrieval + generation
-  /api/v1/symbols  → AST symbol lookup
-  /api/v1/persona  → repo profiling + onboarding guide
-  /api/v1/pr       → PR summarizer
-  /api/v1/eval     → RAGAS evaluation
+  /health          -> health check
+  /api/v1/ingest   -> repo ingestion pipeline
+  /api/v1/query    -> retrieval + generation
+  /api/v1/symbols  -> AST symbol lookup
+  /api/v1/persona  -> repo profiling + onboarding guide
+  /api/v1/pr       -> PR summarizer
+  /api/v1/eval     -> RAGAS evaluation
 """
 
 from contextlib import asynccontextmanager
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import ingest, query, symbols, persona, pr, eval as eval_router
+from app.routers import ingest, query, symbols, repo_files, persona, pr, eval as eval_router
 from app.core.vector_store import ensure_collection_exists
 from app.core.llm_provider import get_provider_info
 
 
 # ---------------------------------------------------------------------------
-# Lifespan — runs on startup / shutdown
+# Lifespan - runs on startup / shutdown
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: ensure Qdrant collection is ready
     try:
-        await ensure_collection_exists()
-        print("✅ Qdrant collection ready")
+        await asyncio.wait_for(ensure_collection_exists(), timeout=8)
+        print("[OK] Qdrant collection ready")
+    except asyncio.TimeoutError:
+        print("[WARN] Qdrant collection init timed out at startup (will retry lazily).")
     except Exception as e:
-        print(f"⚠️  Qdrant connection failed (will retry on first request): {e}")
+        print(f"[WARN] Qdrant connection failed (will retry on first request): {e}")
 
-    print(f"✅ LLM provider: {settings.LLM_PROVIDER} → {get_provider_info()['model']}")
+    print(f"[OK] LLM provider: {settings.LLM_PROVIDER} -> {get_provider_info()['model']}")
     yield
     # Shutdown: nothing to clean up (yet)
 
@@ -44,7 +47,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="RAG pipeline powering RepoTalk — chat with any GitHub repo.",
+    description="RAG pipeline powering RepoTalk - chat with any GitHub repo.",
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
     lifespan=lifespan,
@@ -67,6 +70,7 @@ app.add_middleware(
 app.include_router(ingest.router,  prefix="/api/v1/ingest",  tags=["Ingestion"])
 app.include_router(query.router,   prefix="/api/v1/query",   tags=["Query"])
 app.include_router(symbols.router, prefix="/api/v1/symbols", tags=["Symbols"])
+app.include_router(repo_files.router, prefix="/api/v1/repos", tags=["Repo Explorer"])
 app.include_router(persona.router, prefix="/api/v1/persona", tags=["Persona"])
 app.include_router(pr.router,      prefix="/api/v1/pr",      tags=["PR Summarizer"])
 app.include_router(eval_router.router, prefix="/api/v1/eval", tags=["Evaluation"])

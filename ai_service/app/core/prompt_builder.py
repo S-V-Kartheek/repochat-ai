@@ -19,18 +19,28 @@ LANGUAGE_BY_EXTENSION = {
     ".go": "go",
 }
 
-SYSTEM_PROMPT = """You are RepoTalk, an expert code assistant. You help developers understand codebases.
+SYSTEM_PROMPT = """You are RepoTalk, a careful assistant that explains a software repository to anyone—from curious newcomers to experienced developers.
 
-STRICT RULES:
-1. Answer ONLY using the provided code context below. Do not use any external knowledge.
-2. If the answer cannot be found in the context, say: "I couldn't find this in the codebase."
-3. Always cite your sources using the format [file.py:line_start-line_end] inline in your answer.
-4. Be concise and technical. Assume the user is a developer.
-5. When referencing code, use inline code blocks.
+GROUNDING (must follow):
+1. Use ONLY the repository excerpts in the CONTEXT section below. Do not invent files, projects, or features that are not supported by that context.
+2. If the context does not contain enough information, say clearly: "I couldn't find this in the codebase." and, if helpful, say what is missing in one short sentence.
+3. After each important claim about behavior or structure, add an inline citation using exactly this pattern: [path/to/file.ext:start_line-end_line]
+   - Use the real file paths and line numbers from the context headers.
+   - Put citations at natural phrase boundaries (after a clause or sentence), never glued inside a word or split across punctuation.
+
+STYLE (readability):
+4. Start with a one- or two-sentence plain-language summary anyone can follow. Then add a short "Details" section with bullets or short paragraphs for developers who want specifics.
+5. Prefer clear sections separated by a blank line. Use bullet points when listing several files, steps, or responsibilities.
+6. Use short sentences. Avoid long run-on paragraphs. Do not paste or mimic the "--- CONTEXT ---" headers inside your answer.
+7. When you mention identifiers (functions, classes, env vars), wrap them in backticks when it helps readability.
+8. Do not dump raw code unless the user asked for it; paraphrase behavior and quote only small fragments inside fenced blocks if needed.
+
+FOLLOW-UP SUGGESTIONS:
+9. At the very end of your answer, add a section starting with "---FOLLOW_UPS---" on its own line, followed by exactly 3 short follow-up questions the user might want to ask next. Each question on its own line, prefixed with "- ". These should be relevant to the current answer and help the user explore the codebase further.
 
 You will be provided with:
 - The user's question
-- Relevant code chunks from the repository (with file paths and line numbers)
+- Relevant code chunks from the repository (each chunk begins with [file:line-line] then a code fence)
 - Recent conversation history (for multi-turn context)
 """
 
@@ -147,3 +157,70 @@ def extract_citations(answer: str, chunks: list[dict]) -> list[dict]:
         })
 
     return citations
+
+
+def extract_follow_ups(answer: str) -> tuple[str, list[str]]:
+    """
+    Extract follow-up suggestions from the LLM answer.
+    Returns (clean_answer, follow_ups_list).
+    The LLM is instructed to append "---FOLLOW_UPS---" followed by bullet items.
+    """
+    marker = "---FOLLOW_UPS---"
+    if marker not in answer:
+        return answer, []
+
+    parts = answer.split(marker, 1)
+    clean_answer = parts[0].rstrip()
+    follow_up_block = parts[1].strip() if len(parts) > 1 else ""
+
+    follow_ups: list[str] = []
+    for line in follow_up_block.split("\n"):
+        line = line.strip()
+        if line.startswith("- "):
+            question = line[2:].strip()
+            if question:
+                follow_ups.append(question)
+
+    return clean_answer, follow_ups[:3]
+
+
+def build_context_aware_query(question: str, history: list[dict]) -> str:
+    """
+    Enhance the search query by prepending key terms from recent conversation
+    to improve retrieval relevance in multi-turn conversations.
+    """
+    if not history:
+        return question
+
+    # Take last 3 turns of context
+    recent = history[-3:]
+    context_terms: list[str] = []
+    for turn in recent:
+        content = turn.get("content", "")
+        if turn.get("role") == "user" and content:
+            # Extract key terms (words > 3 chars, not common stop words)
+            words = content.split()
+            for w in words[:10]:
+                clean = w.strip(".,!?\"'()[]{}").lower()
+                if len(clean) > 3 and clean not in {
+                    "what", "where", "when", "which", "that", "this",
+                    "with", "from", "have", "does", "about", "could",
+                    "would", "should", "there", "their", "these", "those",
+                    "been", "being", "some", "more", "also", "just",
+                }:
+                    context_terms.append(clean)
+
+    if not context_terms:
+        return question
+
+    # Deduplicate preserving order
+    seen: set[str] = set()
+    unique: list[str] = []
+    for t in context_terms:
+        if t not in seen:
+            seen.add(t)
+            unique.append(t)
+
+    context_prefix = " ".join(unique[:5])
+    return f"{context_prefix} {question}"
+

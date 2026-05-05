@@ -1,0 +1,219 @@
+  Use whichever setup matches how you run RepoTalk.
+
+
+
+================================================================================
+
+WHY THINGS FEEL SLOW (read this once)
+
+================================================================================
+
+
+
+- pip install -r requirements.txt is ONLY needed when you create a new venv or when
+
+  requirements.txt changes. Do NOT run it every time you start the app — that
+
+  reinstalls large ML stacks (sentence-transformers, PyTorch, etc.) and can take
+
+  many minutes.
+
+
+
+- python -m venv venv is ONLY needed once per machine/folder. If you recreate the
+
+  venv, you must pip install again — that is why "every time" feels broken if you
+
+  repeat the setup block.
+
+
+
+- npm install is mainly slow the first time (downloads node_modules). After that,
+
+  it is usually quick unless you deleted node_modules or changed package.json.
+
+
+
+- ESLint / editor "lint" is your IDE checking files — it is not reinstalling
+
+  requirements.txt. Next.js dev also compiles on first request; the first page
+
+  load can be slower, then it is incremental.
+
+
+
+- docker compose up --build rebuilds images — slow. Use "docker compose up"
+
+  without --build when you did not change Dockerfiles.
+
+
+
+
+
+================================================================================
+
+Full stack with Docker (from repo root)
+
+================================================================================
+
+
+
+cd c:\dev\RepoTalk
+
+copy .env.example .env
+
+
+
+Edit .env, then:
+
+
+
+docker compose up --build
+
+
+
+(or docker-compose up --build if your Docker is older)
+
+
+
+Open http://localhost:3000.
+
+
+
+
+
+================================================================================
+
+Frontend only (local Next.js)
+
+================================================================================
+
+
+
+First time in this repo:
+
+
+
+cd c:\dev\RepoTalk\frontend
+
+npm install
+
+
+
+Every day:
+
+
+
+cd c:\dev\RepoTalk\frontend
+
+npm run dev
+
+
+
+If assets 404 or things feel broken:
+
+
+
+cd c:\dev\RepoTalk\frontend
+
+npm run dev:fresh
+
+
+
+
+
+================================================================================
+
+Manual full stack (three terminals)
+
+================================================================================
+
+
+
+--- AI service ---
+
+
+
+FIRST TIME ONLY (creates venv + installs Python deps — can take a long time):
+
+
+
+cd c:\dev\RepoTalk\ai_service
+
+python -m venv venv
+
+.\venv\Scripts\activate
+
+pip install -r requirements.txt
+
+
+
+EVERY DAY (after venv exists and deps are installed):
+
+
+
+cd c:\dev\RepoTalk\ai_service
+
+.\venv\Scripts\activate
+
+uvicorn app.main:app --reload --port 8000
+
+
+
+
+
+--- Gateway ---
+
+
+
+FIRST TIME:
+
+
+
+cd c:\dev\RepoTalk\gateway
+
+npm install
+
+
+
+EVERY DAY:
+
+
+
+cd c:\dev\RepoTalk\gateway
+
+npm run dev
+
+
+
+
+
+--- Frontend ---
+
+
+
+FIRST TIME:
+
+
+
+cd c:\dev\RepoTalk\frontend
+
+npm install
+
+
+
+EVERY DAY:
+
+
+
+cd c:\dev\RepoTalk\frontend
+
+npm run dev
+
+
+
+Set NEXT_PUBLIC_GATEWAY_URL in frontend\.env.local (e.g. http://localhost:4000)
+
+so the UI can reach the API.
+
+

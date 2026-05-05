@@ -89,6 +89,37 @@ sessionRoutes.get("/", requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/sessions/search?repoId=xxx&q=keyword
+ * Search session history by session title and message content.
+ */
+sessionRoutes.get("/search", requireAuth, async (req, res) => {
+  const userId = await ensureUser(req.userId!, req.userEmail);
+  const { repoId, q } = req.query;
+  const queryText = typeof q === "string" ? q.trim() : "";
+
+  if (!queryText) {
+    res.json([]);
+    return;
+  }
+
+  const sessions = await prisma.session.findMany({
+    where: {
+      userId,
+      ...(repoId && typeof repoId === "string" ? { repoId } : {}),
+      OR: [
+        { title: { contains: queryText } },
+        { messages: { some: { content: { contains: queryText } } } },
+      ],
+    },
+    orderBy: { updatedAt: "desc" },
+    include: { _count: { select: { messages: true } } },
+    take: 50,
+  });
+
+  res.json(sessions);
+});
+
+/**
  * GET /api/sessions/:sessionId
  * Get a session with all its messages.
  */
