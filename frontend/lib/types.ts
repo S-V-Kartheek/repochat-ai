@@ -106,3 +106,38 @@ export interface BillingStatus {
     cancelAtPeriodEnd: boolean;
   };
 }
+
+export interface BookmarkedMessage extends Message {
+  session: {
+    id: string;
+    title: string | null;
+    repo: {
+      id: string;
+      name: string;
+    };
+  };
+}
+
+export interface SuggestedQuestion {
+  id: string;
+  label?: string;
+  question: string;
+  category: string;
+}
+
+export interface RepoPersona {
+  repo_name: string;
+  repo_type: string;
+  expertise_level: string;
+  dominant_language: string;
+  architecture_style: string;
+  total_files?: number;
+  total_chunks?: number;
+  frameworks?: string[];
+  stack?: string[];
+  architecture_overview?: string;
+  key_entry_points?: string[];
+  suggested_questions: SuggestedQuestion[];
+  onboarding_guide?: string;
+  file_tree?: string;
+}

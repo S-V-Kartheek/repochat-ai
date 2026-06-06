@@ -109,6 +109,9 @@ export function createApiClient(getToken: () => Promise<string | null>) {
           getToken,
           { method: "PATCH" }
         ),
+
+      getBookmarks: () =>
+        apiFetch<import("./types").BookmarkedMessage[]>("/api/sessions/bookmarks", getToken),
     },
 
     // ── Chat ─────────────────────────────────────────────────────────────────
@@ -153,6 +156,22 @@ export function createApiClient(getToken: () => Promise<string | null>) {
 
         return res.body;
       },
+    },
+
+    // ── Billing ──────────────────────────────────────────────────────────────
+
+    billing: {
+      status: () =>
+        apiFetch<import("./types").BillingStatus>("/api/stripe/status", getToken),
+        
+      portal: () =>
+        apiFetch<{ url: string }>("/api/stripe/portal", getToken, { method: "POST" }),
+        
+      checkout: (planId: string) =>
+        apiFetch<{ url: string }>("/api/stripe/checkout", getToken, {
+          method: "POST",
+          body: JSON.stringify({ planId }),
+        }),
     },
   };
 }
