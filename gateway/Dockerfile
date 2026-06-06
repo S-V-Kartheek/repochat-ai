@@ -7,6 +7,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install OpenSSL for Prisma engine during build
+RUN apk add --no-cache openssl
+
 # Install dependencies first (layer caching)
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -24,6 +27,9 @@ RUN npm run build
 
 # ─── Runtime ───────────────────────────────────────────────
 FROM node:20-alpine AS runtime
+
+# Install OpenSSL (required by Prisma engine)
+RUN apk add --no-cache openssl
 
 # Security: non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
