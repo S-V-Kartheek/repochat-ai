@@ -1,7 +1,6 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  darkMode: ["class"],
   content: [
     "./pages/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
@@ -51,9 +50,10 @@ const config: Config = {
         },
         // RepoTalk brand colors
         brand: {
-          DEFAULT: "#534AB7",
-          light: "#7B75D4",
-          dark: "#3C3489",
+          DEFAULT: "#5b5bd6",
+          light: "#7b7be4",
+          dark: "#4444b8",
+          soft: "#eeeeff",
         },
       },
       borderRadius: {

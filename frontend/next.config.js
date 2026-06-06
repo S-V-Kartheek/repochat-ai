@@ -1,4 +1,13 @@
 /** @type {import('next').NextConfig} */
+const isProductionDeploy = process.env.VERCEL_ENV === "production";
+const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
+
+if (isProductionDeploy && clerkPublishableKey.startsWith("pk_test_")) {
+  throw new Error(
+    "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY must be a Clerk live key for production Vercel deployments."
+  );
+}
+
 const nextConfig = {
   reactStrictMode: true,
 

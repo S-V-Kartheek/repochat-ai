@@ -13,7 +13,7 @@ COPY prisma ./prisma/
 RUN npm ci
 
 # Generate Prisma client
-RUN npx prisma generate
+RUN npx prisma generate --schema prisma/schema.production.prisma
 
 # Copy source and build TypeScript
 COPY . .
@@ -41,4 +41,4 @@ EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD wget -qO- http://localhost:4000/health || exit 1
 
-CMD ["node", "dist/index.js"]
+CMD ["sh", "-c", "npx prisma db push --schema prisma/schema.production.prisma --skip-generate && node dist/index.js"]

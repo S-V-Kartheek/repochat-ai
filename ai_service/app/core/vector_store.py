@@ -5,6 +5,8 @@ Manages all interactions with Qdrant: collection setup, upsert, hybrid search.
 Phase 1 — Week 1 & 2 implementation.
 """
 
+from pathlib import Path
+
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models as rest
 from app.config import settings
@@ -14,20 +16,38 @@ from app.core.chunker import Chunk
 # Collection Config
 # ---------------------------------------------------------------------------
 COLLECTION_NAME = settings.QDRANT_COLLECTION
-VECTOR_SIZE = 768          # nomic-embed-code-v1 output dimension
+VECTOR_SIZE = settings.EMBEDDING_DIMENSION
 DISTANCE = rest.Distance.COSINE
 
 # ---------------------------------------------------------------------------
 # Client (singleton)
 # ---------------------------------------------------------------------------
 _client: AsyncQdrantClient | None = None
+_local_qdrant_path = Path(__file__).resolve().parents[2] / ".qdrant_local"
+
+
+def _should_use_local_qdrant() -> bool:
+    """Prefer the embedded local store when the env still has placeholders."""
+    qdrant_url = settings.QDRANT_URL.strip().lower()
+    qdrant_api_key = settings.QDRANT_API_KEY.strip().lower()
+
+    if not qdrant_url:
+        return True
+
+    if "your-cluster" in qdrant_url or "your_qdrant_api_key_here" in qdrant_api_key:
+        return True
+
+    return False
 
 
 async def get_qdrant_client() -> AsyncQdrantClient:
     """Lazy-initialize the Qdrant async client (singleton)."""
     global _client
     if _client is None:
-        if settings.QDRANT_URL.startswith("http://localhost"):
+        if _should_use_local_qdrant():
+            _local_qdrant_path.mkdir(parents=True, exist_ok=True)
+            _client = AsyncQdrantClient(path=str(_local_qdrant_path))
+        elif settings.QDRANT_URL.startswith("http://localhost"):
             _client = AsyncQdrantClient(url=settings.QDRANT_URL)
         else:
             _client = AsyncQdrantClient(
@@ -44,8 +64,25 @@ async def ensure_collection_exists() -> None:
     """
     client = await get_qdrant_client()
     collections = await client.get_collections()
-    
-    if not any(c.name == COLLECTION_NAME for c in collections.collections):
+    collection_exists = any(c.name == COLLECTION_NAME for c in collections.collections)
+
+    if collection_exists:
+        collection = await client.get_collection(COLLECTION_NAME)
+        vector_config = collection.config.params.vectors
+        current_size = getattr(vector_config, "size", None)
+
+        if current_size != VECTOR_SIZE:
+            if _should_use_local_qdrant() or settings.DEBUG:
+                await client.delete_collection(COLLECTION_NAME)
+                collection_exists = False
+            else:
+                raise RuntimeError(
+                    f"Qdrant collection '{COLLECTION_NAME}' has vector size {current_size}, "
+                    f"but {settings.EMBEDDING_MODEL} requires {VECTOR_SIZE}. "
+                    "Create a new collection or re-index with a matching embedding model."
+                )
+
+    if not collection_exists:
         await client.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=rest.VectorParams(

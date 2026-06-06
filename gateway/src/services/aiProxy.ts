@@ -7,11 +7,14 @@ import axios from "axios";
 import { IncomingMessage } from "http";
 import { Response as ExpressResponse } from "express";
 
-const AI_URL =
-  process.env.AI_SERVICE_URL || "http://localhost:8000";
+function getAiServiceUrl(): string {
+  if (process.env.AI_SERVICE_URL) return process.env.AI_SERVICE_URL;
+  if (process.env.AI_SERVICE_HOST) return `https://${process.env.AI_SERVICE_HOST}`;
+  return "http://localhost:8000";
+}
 
 export const aiClient = axios.create({
-  baseURL: AI_URL,
+  baseURL: getAiServiceUrl(),
   timeout: 120_000,
   headers: { "Content-Type": "application/json" },
 });

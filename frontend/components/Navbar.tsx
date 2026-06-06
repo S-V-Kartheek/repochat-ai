@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton, SignInButton } from "@clerk/nextjs";
-import { Sparkles, MessageSquare, LayoutDashboard } from "lucide-react";
+import { Sparkles, MessageSquare, LayoutDashboard, GitPullRequest, Bookmark } from "lucide-react";
 
 const NAV_LINKS = [
   { href: "/ingest", label: "Repos", icon: LayoutDashboard },
+  { href: "/bookmarks", label: "Bookmarks", icon: Bookmark },
 ];
+
+const ACTIVE_MODEL = "Llama 3.3 70B";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -17,8 +20,9 @@ export default function Navbar() {
       className="fixed top-0 left-0 right-0 z-50"
       style={{
         height: "var(--navbar-h)",
-        background: "rgba(246,248,251,0.88)",
-        backdropFilter: "blur(10px)",
+        background: "rgba(247,248,253,0.92)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
         borderBottom: "1px solid var(--border)",
       }}
       aria-label="Main navigation"
@@ -34,7 +38,7 @@ export default function Navbar() {
             className="flex items-center justify-center w-8 h-8 rounded-lg"
             style={{
               color: "#fff",
-              background: "linear-gradient(180deg,#3878f7 0%,#2458c9 100%)",
+              background: "linear-gradient(155deg,#6c6cdf 0%,#4d4dc9 100%)",
               boxShadow: "var(--glow-accent)",
             }}
             aria-hidden="true"
@@ -87,16 +91,26 @@ export default function Navbar() {
 
         {/* Right — auth */}
         <div className="flex items-center gap-2 md:gap-3">
+          <Link
+            href="/pr"
+            className="btn btn-secondary btn-sm"
+            aria-label="Open PR Summarizer"
+          >
+            <GitPullRequest size={14} />
+            <span className="hidden sm:inline">PR Summarizer</span>
+            <span className="sm:hidden">PR</span>
+          </Link>
+
           <div
             className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
             style={{
-              background: "var(--surface)",
+              background: "var(--surface-2)",
               color: "var(--text-muted)",
               border: "1px solid var(--border)",
             }}
           >
             <Sparkles size={12} style={{ color: "var(--accent)" }} />
-            Premium UI Mode
+            {ACTIVE_MODEL}
           </div>
 
           <SignedOut>

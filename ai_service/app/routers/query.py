@@ -7,6 +7,8 @@ Phase 1 — Week 2 implementation.
 """
 
 import json
+import uuid
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from app.models.schemas import QueryRequest, QueryResponse, Citation
@@ -16,6 +18,20 @@ from app.core.prompt_builder import build_query_prompt, extract_citations
 from app.core.llm_provider import get_llm_client, get_model_name
 
 router = APIRouter()
+
+
+def log_query(trace_id: str, stage: str, **details):
+    extra = " ".join(f"{key}={value}" for key, value in details.items())
+    print(f"[{datetime.utcnow().isoformat()}Z] [query] trace={trace_id} stage={stage} {extra}".rstrip(), flush=True)
+
+
+def summarize_chunks(chunks: list[dict]) -> str:
+    summary = []
+    for index, chunk in enumerate(chunks, start=1):
+        summary.append(
+            f"{index}:{chunk.get('file_path')}:{chunk.get('start_line')}-{chunk.get('end_line')}@{round(float(chunk.get('score', 0)), 3)}"
+        )
+    return ";".join(summary)
 
 
 @router.post("/", response_model=QueryResponse, summary="Ask a question about a repo")
@@ -29,9 +45,20 @@ async def query_repo(request: QueryRequest):
       5. Extract citations
       6. Return structured response
     """
+    trace_id = uuid.uuid4().hex[:8]
     try:
+        log_query(
+            trace_id,
+            "start",
+            repo=request.repo_id,
+            session=request.session_id,
+            top_k=request.top_k,
+            history_turns=len(request.history),
+            question_len=len(request.question),
+        )
         # 1. Embed the question
         query_vector = embed_query(request.question)
+        log_query(trace_id, "embed:done", dimensions=len(query_vector))
 
         # 2. Retrieve from Qdrant
         retrieved_chunks = await hybrid_search(
@@ -40,8 +67,15 @@ async def query_repo(request: QueryRequest):
             query_text=request.question,
             top_k=request.top_k,
         )
+        log_query(
+            trace_id,
+            "retrieve:done",
+            chunks=len(retrieved_chunks),
+            selected=summarize_chunks(retrieved_chunks),
+        )
 
         if not retrieved_chunks:
+            log_query(trace_id, "complete:no_chunks")
             return QueryResponse(
                 answer="I couldn't find any relevant code in this repository for your question. "
                        "The repository may not have been ingested yet, or the question doesn't match any indexed code.",
@@ -56,9 +90,11 @@ async def query_repo(request: QueryRequest):
             retrieved_chunks=retrieved_chunks,
             conversation_history=request.history,
         )
+        log_query(trace_id, "prompt:built", messages=len(messages))
 
         # 4. Call LLM (non-streaming)
         client = get_llm_client()
+        log_query(trace_id, "llm:start", model=get_model_name(), streaming=False)
         response = await client.chat.completions.create(
             model=get_model_name(),
             messages=messages,
@@ -67,6 +103,7 @@ async def query_repo(request: QueryRequest):
         )
 
         answer = response.choices[0].message.content or ""
+        log_query(trace_id, "llm:done", answer_chars=len(answer))
 
         # 5. Extract citations
         raw_citations = extract_citations(answer, retrieved_chunks)
@@ -80,6 +117,7 @@ async def query_repo(request: QueryRequest):
             )
             for c in raw_citations
         ]
+        log_query(trace_id, "complete", citations=len(citations))
 
         return QueryResponse(
             answer=answer,
@@ -89,6 +127,7 @@ async def query_repo(request: QueryRequest):
         )
 
     except Exception as e:
+        log_query(trace_id, "error", error=repr(e))
         raise HTTPException(status_code=500, detail=f"Query pipeline error: {str(e)}")
 
 
@@ -105,9 +144,21 @@ async def query_repo_stream(request: QueryRequest):
     """
 
     async def event_generator():
+        trace_id = uuid.uuid4().hex[:8]
         try:
+            log_query(
+                trace_id,
+                "start",
+                repo=request.repo_id,
+                session=request.session_id,
+                top_k=request.top_k,
+                history_turns=len(request.history),
+                question_len=len(request.question),
+                streaming=True,
+            )
             # 1. Embed
             query_vector = embed_query(request.question)
+            log_query(trace_id, "embed:done", dimensions=len(query_vector))
 
             # 2. Retrieve
             retrieved_chunks = await hybrid_search(
@@ -116,9 +167,16 @@ async def query_repo_stream(request: QueryRequest):
                 query_text=request.question,
                 top_k=request.top_k,
             )
+            log_query(
+                trace_id,
+                "retrieve:done",
+                chunks=len(retrieved_chunks),
+                selected=summarize_chunks(retrieved_chunks),
+            )
 
             if not retrieved_chunks:
                 no_result_msg = "I couldn't find any relevant code in this repository for your question."
+                log_query(trace_id, "complete:no_chunks")
                 yield f"data: {json.dumps({'token': no_result_msg})}\n\n"
                 yield f"data: {json.dumps({'done': True, 'citations': [], 'session_id': request.session_id})}\n\n"
                 return
@@ -129,9 +187,11 @@ async def query_repo_stream(request: QueryRequest):
                 retrieved_chunks=retrieved_chunks,
                 conversation_history=request.history,
             )
+            log_query(trace_id, "prompt:built", messages=len(messages))
 
             # 4. Stream from LLM
             client = get_llm_client()
+            log_query(trace_id, "llm:start", model=get_model_name(), streaming=True)
             stream = await client.chat.completions.create(
                 model=get_model_name(),
                 messages=messages,
@@ -160,11 +220,18 @@ async def query_repo_stream(request: QueryRequest):
                 }
                 for c in raw_citations
             ]
+            log_query(
+                trace_id,
+                "complete",
+                answer_chars=len(full_answer),
+                citations=len(citations_payload),
+            )
 
             # Final SSE event with citations
             yield f"data: {json.dumps({'done': True, 'citations': citations_payload, 'session_id': request.session_id, 'model_used': get_model_name()})}\n\n"
 
         except Exception as e:
+            log_query(trace_id, "error", error=repr(e))
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(

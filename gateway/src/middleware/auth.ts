@@ -11,6 +11,7 @@
 
 import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "@clerk/backend";
+import { isProduction } from "../config/env";
 
 declare global {
   namespace Express {
@@ -21,9 +22,13 @@ declare global {
   }
 }
 
-const DEV_BYPASS =
-  !process.env.CLERK_SECRET_KEY ||
-  process.env.CLERK_SECRET_KEY.startsWith("sk_test_your_clerk");
+function shouldUseDevBypass(): boolean {
+  if (isProduction()) return false;
+  return (
+    !process.env.CLERK_SECRET_KEY ||
+    process.env.CLERK_SECRET_KEY.startsWith("sk_test_your_clerk")
+  );
+}
 
 export const requireAuth = async (
   req: Request,
@@ -31,7 +36,7 @@ export const requireAuth = async (
   next: NextFunction
 ): Promise<void> => {
   // ── Dev bypass ─────────────────────────────────────────────────────────────
-  if (DEV_BYPASS) {
+  if (shouldUseDevBypass()) {
     req.userId = "dev-user-001";
     req.userEmail = "dev@repotalk.local";
     return next();

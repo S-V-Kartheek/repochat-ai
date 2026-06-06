@@ -27,6 +27,8 @@ STRICT RULES:
 3. Always cite your sources using the format [file.py:line_start-line_end] inline in your answer.
 4. Be concise and technical. Assume the user is a developer.
 5. When referencing code, use inline code blocks.
+6. Do not repeat the question or restate the same point in multiple bullets.
+7. If recent history conflicts with the current question, prioritize the current question.
 
 You will be provided with:
 - The user's question
@@ -36,6 +38,20 @@ You will be provided with:
 
 # Max conversation history turns to include (to stay within context window)
 MAX_HISTORY_TURNS = 10
+
+
+def normalize_text(text: str) -> str:
+    """Normalize text for lightweight duplicate detection."""
+    return re.sub(r"\s+", " ", text.strip().lower())
+
+
+def strip_context_wrapper(content: str) -> str:
+    """Return just the user question if a prior prompt accidentally included context."""
+    if "\n\nQuestion:" in content:
+        return content.rsplit("\n\nQuestion:", 1)[-1].strip()
+    if "Question:" in content:
+        return content.rsplit("Question:", 1)[-1].strip()
+    return content.strip()
 
 
 def get_language_for_file(file_path: str) -> str | None:
@@ -59,11 +75,16 @@ def build_query_prompt(
     """
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    # Inject recent conversation history (trimmed to MAX_HISTORY_TURNS)
+    # Inject recent conversation history, excluding duplicate copies of the
+    # current question. This prevents the model from mixing a repeated user turn
+    # with the final grounded context block.
+    current_question_key = normalize_text(question)
     history = conversation_history[-MAX_HISTORY_TURNS:]
     for turn in history:
         role = turn.get("role", "user")
-        content = turn.get("content", "")
+        content = strip_context_wrapper(turn.get("content", ""))
+        if role == "user" and normalize_text(content) == current_question_key:
+            continue
         if role in ("user", "assistant") and content:
             messages.append({"role": role, "content": content})
 
@@ -83,11 +104,21 @@ def format_context_block(chunks: list[dict]) -> str:
         return "--- CONTEXT ---\nNo relevant code found.\n--- END CONTEXT ---"
 
     sections = ["--- CONTEXT ---"]
+    seen_chunks = set()
     for chunk in chunks:
         file_path = chunk.get("file_path", "unknown")
         start_line = chunk.get("start_line", 0)
         end_line = chunk.get("end_line", 0)
         content = chunk.get("content", "")
+        chunk_key = (
+            file_path,
+            start_line,
+            end_line,
+            normalize_text(content[:500]),
+        )
+        if chunk_key in seen_chunks:
+            continue
+        seen_chunks.add(chunk_key)
 
         # Detect language for syntax highlighting
         lang = get_language_for_file(file_path) or ""

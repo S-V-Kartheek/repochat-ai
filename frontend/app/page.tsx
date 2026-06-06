@@ -60,14 +60,19 @@ const STEPS = [
 export default function LandingPage() {
   return (
     <main className="px-5 md:px-8 pb-20">
+      {/* ── Hero ───────────────────────────────────────────────────────── */}
       <section className="mx-auto max-w-[1180px] pt-16 md:pt-24">
         <div className="grid lg:grid-cols-2 gap-8 md:gap-12 items-center">
           <div>
             <div
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-6"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+              style={{
+                background: "var(--accent-soft)",
+                border: "1px solid var(--accent-soft-border)",
+                color: "var(--accent)",
+              }}
             >
-              <Sparkles size={12} style={{ color: "var(--accent)" }} />
+              <Sparkles size={12} />
               Premium AI code research workspace
             </div>
 
@@ -91,19 +96,26 @@ export default function LandingPage() {
 
             <div className="mt-8 grid sm:grid-cols-3 gap-3">
               {METRICS.map((metric) => (
-                <div key={metric.label} className="card p-4" style={{ background: "var(--surface-2)" }}>
-                  <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>{metric.value}</p>
+                <div
+                  key={metric.label}
+                  className="card p-4"
+                  style={{ background: "var(--surface-2)" }}
+                >
+                  <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                    {metric.value}
+                  </p>
                   <p className="text-xs mt-1">{metric.label}</p>
                 </div>
               ))}
             </div>
           </div>
 
+          {/* Hero demo card */}
           <div
-            className="card p-6 md:p-7"
+            className="card hero-demo-card p-6 md:p-7"
             style={{
-              background: "linear-gradient(180deg,#ffffff 0%,#f7f9ff 100%)",
-              borderColor: "#dbe5f5",
+              background: "linear-gradient(180deg, #ffffff 0%, #f5f5ff 100%)",
+              borderColor: "var(--accent-soft-border)",
               boxShadow: "var(--shadow-lg)",
             }}
           >
@@ -115,16 +127,29 @@ export default function LandingPage() {
             </div>
 
             <div className="space-y-4 text-sm">
-              <div className="p-3 rounded-xl" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+              <div
+                className="p-3 rounded-xl"
+                style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+              >
                 <p className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>You</p>
                 <p style={{ color: "var(--text)" }}>Where is authentication validated in this repo?</p>
               </div>
-              <div className="p-3 rounded-xl" style={{ background: "#ecf3ff", border: "1px solid #cfdffe" }}>
-                <p className="text-xs mb-1" style={{ color: "#1d4ed8" }}>RepoTalk</p>
-                <p style={{ color: "#0f172a" }}>
-                  Authentication is enforced in `middleware/auth.ts` via Clerk JWT verification and user context injection.
+              <div
+                className="p-3 rounded-xl"
+                style={{ background: "var(--accent-soft)", border: "1px solid var(--accent-soft-border)" }}
+              >
+                <p className="text-xs mb-1" style={{ color: "var(--accent)" }}>RepoTalk</p>
+                <p style={{ color: "var(--text)" }}>
+                  Authentication is enforced in <code>middleware/auth.ts</code> via Clerk JWT verification and user context injection.
                 </p>
-                <div className="mt-2 inline-flex items-center gap-2 text-xs px-2 py-1 rounded-lg" style={{ background: "#ffffff", border: "1px solid #cbdaf8", color: "#1e40af" }}>
+                <div
+                  className="mt-2 inline-flex items-center gap-2 text-xs px-2 py-1 rounded-lg"
+                  style={{
+                    background: "#ffffff",
+                    border: "1px solid var(--accent-soft-border)",
+                    color: "var(--accent)",
+                  }}
+                >
                   <FileCode2 size={12} />
                   middleware/auth.ts:32-61
                 </div>
@@ -134,6 +159,7 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── How it works ───────────────────────────────────────────────── */}
       <section className="mx-auto max-w-[1180px] py-20">
         <div className="text-center mb-12">
           <h2>How teams use RepoTalk</h2>
@@ -155,6 +181,7 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Feature grid ───────────────────────────────────────────────── */}
       <section className="mx-auto max-w-[1180px] pb-20">
         <div className="grid md:grid-cols-2 gap-5">
           {FEATURES.map((feature) => {
@@ -175,15 +202,19 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── CTA ────────────────────────────────────────────────────────── */}
       <section className="mx-auto max-w-[980px] pb-14">
         <div
           className="card p-8 md:p-10 text-center"
           style={{
-            background: "linear-gradient(180deg,#ffffff 0%,#f3f7ff 100%)",
-            borderColor: "#dbe5f5",
+            background: "linear-gradient(135deg, #f5f5ff 0%, #ffffff 60%, #f0f5ff 100%)",
+            borderColor: "var(--accent-soft-border)",
           }}
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-4" style={{ background: "#e8f0ff", color: "#1d4ed8" }}>
+          <div
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-4"
+            style={{ background: "var(--accent-soft)", color: "var(--accent)", border: "1px solid var(--accent-soft-border)" }}
+          >
             <ShieldCheck size={12} />
             Trusted answers, production flow
           </div>
@@ -197,6 +228,7 @@ export default function LandingPage() {
           </Link>
         </div>
       </section>
+
       <footer
         className="mx-auto max-w-[1180px] py-7 text-center text-xs"
         style={{

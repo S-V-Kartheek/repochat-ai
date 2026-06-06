@@ -34,7 +34,9 @@ __pycache__/
 *.so
 .Python
 venv/
+venv*/
 .venv/
+.venv-*/
 env/
 .env/
 *.egg-info/
@@ -62,10 +64,18 @@ coverage.xml
 
 # ---- Repos cloned for ingestion (temp storage) ----
 ai_service/tmp/cloned_repos/
+repos_cache/
+ai_service/repos_cache/
+ai_service/tmp*/
+pytest-cache-files-*/
 
 # ---- Model cache (downloaded locally — can be large) ----
 ai_service/.model_cache/
 ai_service/models/
+ai_service/.qdrant_local*/
+
+# ---- Docs assets (generated) ----
+docs/demo.gif
 
 # ---- Logs ----
 logs/
@@ -73,12 +83,10 @@ logs/
 ai_service/logs/
 
 # ---- Prisma ----
-gateway/prisma/migrations/.migration_lock
+gateway/prisma/dev.db
+gateway/prisma/dev.db-journal
 
 # ---- Test artifacts ----
 test-results/
 playwright-report/
 coverage/
-
-# ---- Docs assets (generated) ----
-docs/demo.gif

@@ -2,11 +2,15 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Send, Loader2, BookmarkCheck, Bookmark, AlertTriangle } from "lucide-react";
 import { createApiClient } from "@/lib/api";
 import StreamingText from "./StreamingText";
 import CitationChip from "./CitationChip";
-import type { Message, Citation, Session } from "@/lib/types";
+import QualityBadge from "./QualityBadge";
+import type { Message, Citation, Session, SuggestedQuestion, RagasScore } from "@/lib/types";
+
 
 // ── Single message bubble ─────────────────────────────────────────────────────
 
@@ -20,13 +24,8 @@ function MessageBubble({
   const isUser = message.role === "USER";
 
   return (
-    <div
-      className={`flex ${isUser ? "justify-end" : "justify-start"} mb-6 slide-up`}
-    >
-      <div
-        className="max-w-[85%] space-y-2"
-        style={{ minWidth: 0 }}
-      >
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-6 slide-up`}>
+      <div className="max-w-[85%] space-y-2" style={{ minWidth: 0 }}>
         {/* Role label */}
         <div
           className={`text-[11px] font-medium uppercase tracking-wider ${isUser ? "text-right" : "text-left"}`}
@@ -39,15 +38,53 @@ function MessageBubble({
         <div
           className="px-4 py-3 rounded-xl text-sm leading-relaxed"
           style={{
-            background: isUser ? "linear-gradient(180deg,#2f6ff1 0%,#2457ca 100%)" : "var(--surface-2)",
+            background: isUser
+              ? "linear-gradient(155deg, #6c6cdf 0%, #4d4dc9 100%)"
+              : "var(--surface-2)",
             color: isUser ? "#fff" : "var(--text)",
             border: isUser ? "none" : "1px solid var(--border)",
             boxShadow: "var(--shadow-sm)",
           }}
         >
-          <p className="whitespace-pre-wrap break-words m-0" style={{ color: isUser ? "#fff" : "var(--text)" }}>
-            {message.content}
-          </p>
+          {isUser ? (
+            <p className="whitespace-pre-wrap break-words m-0" style={{ color: "#fff" }}>
+              {message.content}
+            </p>
+          ) : (
+            <div
+              className="prose prose-sm max-w-none break-words"
+              style={{ color: "var(--text)", lineHeight: "1.7" }}
+            >
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code: ({ children, className }) => {
+                    const isBlock = className?.includes("language-");
+                    return isBlock ? (
+                      <pre className="code-block my-2" style={{ fontSize: "0.79rem" }}>
+                        <code>{children}</code>
+                      </pre>
+                    ) : (
+                      <code
+                        style={{
+                          padding: "0.1em 0.38em",
+                          borderRadius: "5px",
+                          background: "var(--accent-soft)",
+                          color: "var(--accent)",
+                          fontSize: "0.83em",
+                          border: "1px solid var(--accent-soft-border)",
+                        }}
+                      >
+                        {children}
+                      </code>
+                    );
+                  },
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
+            </div>
+          )}
         </div>
 
         {/* Citations */}
@@ -56,6 +93,12 @@ function MessageBubble({
             {message.citations.map((c, i) => (
               <CitationChip key={i} citation={c} index={i} />
             ))}
+          </div>
+        )}
+
+        {!isUser && message.ragasScore && (
+          <div className="pt-1">
+            <QualityBadge score={message.ragasScore} />
           </div>
         )}
 
@@ -89,12 +132,14 @@ function StreamingBubble({
   question,
   getToken,
   onDone,
+  onStreamError,
 }: {
   repoId: string;
   sessionId: string;
   question: string;
   getToken: () => Promise<string | null>;
-  onDone: (result: { answer: string; citations: Citation[]; messageId?: string }) => void;
+  onDone: (result: { answer: string; citations: Citation[]; messageId?: string; ragasScore?: RagasScore }) => void;
+  onStreamError: (error: string) => void;
 }) {
   const [streamError, setStreamError] = useState<string | null>(null);
 
@@ -124,7 +169,10 @@ function StreamingBubble({
               question={question}
               getToken={getToken}
               onDone={onDone}
-              onError={setStreamError}
+              onError={(msg) => {
+                setStreamError(msg);
+                onStreamError(msg);
+              }}
             />
           )}
         </div>
@@ -140,6 +188,9 @@ export interface ChatPanelProps {
   session: Session;
   lowChunkWarning?: boolean;
   onSessionUpdate?: () => void;
+  suggestedQuestions?: SuggestedQuestion[];
+  pendingQuestion?: string | null;
+  onPendingQuestionConsumed?: () => void;
 }
 
 export default function ChatPanel({
@@ -147,6 +198,9 @@ export default function ChatPanel({
   session,
   lowChunkWarning = false,
   onSessionUpdate,
+  suggestedQuestions = [],
+  pendingQuestion,
+  onPendingQuestionConsumed,
 }: ChatPanelProps) {
   const { getToken } = useAuth();
   const [messages, setMessages] = useState<Message[]>(session.messages ?? []);
@@ -156,8 +210,17 @@ export default function ChatPanel({
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const submittingRef = useRef(false);
 
   const api = createApiClient(getToken);
+
+  // Auto-submit pending question from persona card
+  useEffect(() => {
+    if (pendingQuestion && !streaming) {
+      onPendingQuestionConsumed?.();
+      submitQuestion(pendingQuestion);
+    }
+  }, [pendingQuestion]); // eslint-disable-line
 
   // Auto-scroll
   useEffect(() => {
@@ -169,11 +232,11 @@ export default function ChatPanel({
     setMessages(session.messages ?? []);
   }, [session.id, session.messages]);
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const question = input.trim();
-    if (!question || streaming) return;
+  const submitQuestion = (rawQuestion: string) => {
+    const question = rawQuestion.trim();
+    if (!question || streaming || submittingRef.current) return;
 
+    submittingRef.current = true;
     setInput("");
     setError(null);
     setStreaming(true);
@@ -193,41 +256,53 @@ export default function ChatPanel({
     setMessages((prev) => [...prev, optimisticUser]);
   };
 
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    submitQuestion(input);
+  };
+
   const handleStreamDone = async ({
     answer,
     citations,
     messageId,
+    ragasScore,
   }: {
     answer: string;
     citations: Citation[];
     messageId?: string;
+    ragasScore?: RagasScore;
   }) => {
     setStreaming(false);
     setStreamingQuestion(null);
+    submittingRef.current = false;
 
     const assistantMsg: Message = {
       id: messageId ?? `local-${Date.now()}`,
       role: "ASSISTANT",
       content: answer,
       citations,
-      ragasScore: null,
+      ragasScore: ragasScore ?? null,
       bookmarked: false,
       sessionId: session.id,
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, assistantMsg]);
 
-    // The gateway persists both user and assistant messages for streaming.
     // Refresh parent session state to replace optimistic user message and keep
     // IDs/bookmarks in sync with DB.
     onSessionUpdate?.();
   };
 
+  const handleStreamError = (msg: string) => {
+    setStreaming(false);
+    setStreamingQuestion(null);
+    submittingRef.current = false;
+    setError(msg);
+  };
+
   const handleToggleBookmark = async (messageId: string) => {
     setMessages((prev) =>
-      prev.map((m) =>
-        m.id === messageId ? { ...m, bookmarked: !m.bookmarked } : m
-      )
+      prev.map((m) => (m.id === messageId ? { ...m, bookmarked: !m.bookmarked } : m))
     );
     try {
       await api.sessions.toggleBookmark(session.id, messageId);
@@ -244,14 +319,14 @@ export default function ChatPanel({
   const isEmpty = messages.length === 0 && !streaming;
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full" style={{ background: "var(--surface)" }}>
       {/* Low chunk warning */}
       {lowChunkWarning && (
         <div
           className="flex items-center gap-2 px-4 py-2.5 text-sm flex-shrink-0"
           style={{
             background: "var(--warning-muted)",
-            borderBottom: "1px solid rgba(245,158,11,0.2)",
+            borderBottom: "1px solid rgba(217,119,6,0.18)",
             color: "var(--warning)",
           }}
         >
@@ -263,11 +338,14 @@ export default function ChatPanel({
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-6">
         {isEmpty ? (
-          /* Empty state */
-          <div className="flex flex-col items-center justify-center h-full text-center">
+          /* Empty state with starter questions */
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <div
               className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5"
-              style={{ background: "var(--surface-3)", border: "1px solid var(--border)" }}
+              style={{
+                background: "var(--accent-soft)",
+                border: "1px solid var(--accent-soft-border)",
+              }}
               aria-hidden="true"
             >
               <Send size={22} style={{ color: "var(--accent)" }} />
@@ -275,10 +353,45 @@ export default function ChatPanel({
             <h3 className="text-base font-semibold mb-2" style={{ color: "var(--text)" }}>
               Start the conversation
             </h3>
-            <p className="text-sm max-w-sm" style={{ color: "var(--text-muted)" }}>
-              Ask anything about the codebase. Questions about architecture,
-              specific functions, or how features are implemented all work well.
+            <p className="text-sm max-w-sm mb-6" style={{ color: "var(--text-muted)" }}>
+              Ask anything about this codebase — architecture, specific functions, or how features are implemented.
             </p>
+
+            {/* Starter question chips from persona */}
+            {suggestedQuestions.length > 0 && (
+              <div className="w-full max-w-md space-y-2">
+                <p className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: "var(--text-faint)" }}>
+                  Suggested starters
+                </p>
+                {suggestedQuestions.slice(0, 4).map((q, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setInput(q.question)}
+                    className="w-full text-left px-4 py-3 rounded-xl text-sm transition-all"
+                    style={{
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text-muted)",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "var(--accent-soft-border)";
+                      e.currentTarget.style.color = "var(--text)";
+                      e.currentTarget.style.background = "var(--accent-soft)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "var(--border)";
+                      e.currentTarget.style.color = "var(--text-muted)";
+                      e.currentTarget.style.background = "var(--surface-2)";
+                    }}
+                  >
+                    <span className="font-semibold text-xs block mb-0.5" style={{ color: "var(--accent)" }}>
+                      {q.label}
+                    </span>
+                    {q.question}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div>
@@ -298,6 +411,7 @@ export default function ChatPanel({
                 question={streamingQuestion}
                 getToken={getToken}
                 onDone={handleStreamDone}
+                onStreamError={handleStreamError}
               />
             )}
           </div>
@@ -318,10 +432,7 @@ export default function ChatPanel({
             <AlertTriangle size={13} /> {error}
           </div>
         )}
-        <form
-          onSubmit={handleSubmit}
-          className="flex items-end gap-3"
-        >
+        <form onSubmit={handleSubmit} className="flex items-end gap-3">
           <textarea
             ref={inputRef}
             id="chat-input"

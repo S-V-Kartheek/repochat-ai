@@ -9,6 +9,7 @@ Phase 1 — Week 1 implementation.
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 import uuid
 import asyncio
+from datetime import datetime
 from app.models.schemas import IngestRequest, IngestResponse
 from app.core import repo_cloner, ast_parser, chunker, embedder, vector_store
 
@@ -19,9 +20,16 @@ router = APIRouter()
 INGEST_STATUS = {}
 
 
+def log_ingest(repo_id: str, stage: str, **details):
+    """Emit one-line ingestion diagnostics for local/prod logs."""
+    extra = " ".join(f"{key}={value}" for key, value in details.items())
+    print(f"[{datetime.utcnow().isoformat()}Z] [ingest] repo={repo_id} stage={stage} {extra}".rstrip(), flush=True)
+
+
 async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[str]):
     """Background task implementing the ingestion pipeline."""
     try:
+        log_ingest(repo_id, "queued", url=repo_url, languages=",".join(languages or []))
         # Give Uvicorn a chance to flush the HTTP 200 OK response to the socket
         await asyncio.sleep(1)
         INGEST_STATUS[repo_id] = {
@@ -33,14 +41,18 @@ async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[st
         }
         
         # 1. Clone
+        log_ingest(repo_id, "clone:start")
         repo_path = repo_cloner.clone_repo(repo_url, repo_id)
+        log_ingest(repo_id, "clone:done", path=repo_path)
         
         # 2. Get files
         INGEST_STATUS[repo_id].update({"status": "parsing", "current_stage": "Parsing files..."})
         files = repo_cloner.get_repo_files(repo_path, language_filter=languages)
+        log_ingest(repo_id, "files:selected", count=len(files))
         
         # Ensure collection exists before doing heavy lifting
         await vector_store.ensure_collection_exists()
+        log_ingest(repo_id, "qdrant:ready")
 
         all_chunks = []
         
@@ -58,6 +70,7 @@ async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[st
             all_chunks.extend(file_chunks)
             
         total_chunks = len(all_chunks)
+        log_ingest(repo_id, "chunks:created", files=len(files), chunks=total_chunks)
         INGEST_STATUS[repo_id].update({
             "status": "embedding",
             "current_stage": "Embedding and structuring chunks...",
@@ -71,6 +84,9 @@ async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[st
         for i in range(0, total_chunks, batch_size):
             batch = all_chunks[i:i + batch_size]
             texts = [c.content for c in batch]
+            batch_no = (i // batch_size) + 1
+            total_batches = max(1, (total_chunks + batch_size - 1) // batch_size)
+            log_ingest(repo_id, "embed:start", batch=f"{batch_no}/{total_batches}", size=len(batch))
             
             # Offload heavy CPU work to a separate thread so event loop remains responsive
             embs = await asyncio.to_thread(embedder.embed_texts, texts)
@@ -83,6 +99,7 @@ async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[st
                 "embedded_chunks": embedded_count,
                 "progress_pct": pct
             })
+            log_ingest(repo_id, "embed:done", embedded=embedded_count, total=total_chunks, progress=f"{pct}%")
             
             # Allow event loop to breathe during heavy sync compute
             await asyncio.sleep(0) 
@@ -94,9 +111,10 @@ async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[st
             "current_stage": "Ingestion completed successfully",
             "progress_pct": 100.0
         })
+        log_ingest(repo_id, "done", chunks=total_chunks)
 
     except Exception as e:
-        print(f"Ingestion failed for {repo_id}: {e}")
+        log_ingest(repo_id, "error", error=repr(e))
         INGEST_STATUS[repo_id].update({"status": "error", "error": str(e), "current_stage": "Failed"})
 
 
@@ -106,6 +124,7 @@ async def ingest_repo(request: IngestRequest, background_tasks: BackgroundTasks)
     
     # repo_id is provided by the gateway, but if missing, fallback to uuid
     repo_id = request.repo_id or str(uuid.uuid4())
+    log_ingest(repo_id, "request", url=request.repo_url, languages=",".join(request.languages or []))
     
     INGEST_STATUS[repo_id] = {
         "status": "pending",
