@@ -12,11 +12,14 @@ COPY package*.json ./
 COPY prisma ./prisma/
 RUN npm ci
 
-# Generate Prisma client
+# Copy source
+COPY . .
+
+# Force production schema and generate
+RUN cp prisma/schema.production.prisma prisma/schema.prisma
 RUN npx prisma generate
 
-# Copy source and build TypeScript
-COPY . .
+# Build TypeScript
 RUN npm run build
 
 # ─── Runtime ───────────────────────────────────────────────
