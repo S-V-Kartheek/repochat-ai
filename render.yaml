@@ -63,10 +63,6 @@ services:
     dockerContext: ./ai_service
     plan: free
     region: oregon
-    disk:
-      name: model-cache
-      mountPath: /app/.model_cache
-      sizeGB: 1  # Persist downloaded models so cold starts are fast
     envVars:
       - key: PORT
         value: "8000"
