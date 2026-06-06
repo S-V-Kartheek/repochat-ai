@@ -58,11 +58,10 @@ export interface Citation {
 }
 
 export interface RagasScore {
-  faithfulness: number;
-  answerRelevancy: number;
-  contextPrecision: number;
-  overall: number;
-  grade?: "high" | "medium" | "low";
+  faithfulness?: number;
+  answerRelevancy?: number;
+  contextPrecision?: number;
+  overall?: number;
 }
 
 export interface Message {
@@ -76,17 +75,6 @@ export interface Message {
   createdAt: string;
 }
 
-export interface BookmarkedMessage extends Message {
-  session: {
-    id: string;
-    title: string | null;
-    repo: {
-      id: string;
-      name: string;
-    };
-  };
-}
-
 // ── API Response shapes ────────────────────────────────────────────────────────
 
 export interface ChatQueryResponse {
@@ -95,7 +83,6 @@ export interface ChatQueryResponse {
   model_used: string;
   session_id?: string;
   message_id?: string;
-  ragas_score?: RagasScore;
 }
 
 export interface CreateSessionResponse {
@@ -109,56 +96,4 @@ export interface CreateRepoResponse {
   repoId: string;
   status: string;
   message: string;
-}
-
-// ── Persona ──────────────────────────────────────────────────────────────────────────────
-
-export interface SuggestedQuestion {
-  label: string;
-  question: string;
-  category: "architecture" | "implementation" | "debugging" | "onboarding" | string;
-}
-
-export interface RepoPersona {
-  repo_name: string;
-  dominant_language: string;
-  stack: string[];
-  frameworks: string[];
-  repo_type: string;
-  architecture_style: string;
-  expertise_level: string;
-  file_tree: string;
-  architecture_overview: string;
-  onboarding_guide: string;
-  conventions: string;
-  key_entry_points: string[];
-  suggested_questions: SuggestedQuestion[];
-  total_files: number;
-  total_chunks: number;
-}
-
-// ── Billing ─────────────────────────────────────────────────────────────────────────────
-
-export type PlanTier = "free" | "pro" | "team";
-
-export interface BillingStatus {
-  plan: PlanTier;
-  planExpiresAt: string | null;
-  subscription: {
-    status: string;
-    plan: string;
-    currentPeriodEnd: string;
-    cancelAtPeriodEnd: boolean;
-  } | null;
-}
-
-export interface CheckoutResponse {
-  url: string;
-}
-
-export interface PRSummary {
-  summary: string;
-  impactWarnings: string[];
-  changedFunctions: string[];
-  diffOverview: string;
 }

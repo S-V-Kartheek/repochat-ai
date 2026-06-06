@@ -8,18 +8,13 @@ import type {
   Repo,
   Session,
   Message,
-  BookmarkedMessage,
   ChatQueryResponse,
   CreateRepoResponse,
   CreateSessionResponse,
   IngestStatus,
-  RepoPersona,
-  BillingStatus,
-  CheckoutResponse,
-  PRSummary,
 } from "./types";
 
-const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL || "";
+const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:4000";
 
 // ── Core fetch helper ─────────────────────────────────────────────────────────
 
@@ -82,9 +77,6 @@ export function createApiClient(getToken: () => Promise<string | null>) {
     sessions: {
       list: (repoId: string) =>
         apiFetch<Session[]>(`/api/sessions?repoId=${repoId}`, getToken),
-
-      getBookmarks: () =>
-        apiFetch<BookmarkedMessage[]>("/api/sessions/bookmarks", getToken),
 
       get: (sessionId: string) =>
         apiFetch<Session>(`/api/sessions/${sessionId}`, getToken),
@@ -161,43 +153,6 @@ export function createApiClient(getToken: () => Promise<string | null>) {
 
         return res.body;
       },
-    },
-    // ── Persona ───────────────────────────────────────────────────────────────
-
-    persona: {
-      get: (repoId: string) =>
-        apiFetch<RepoPersona>(`/api/persona/${repoId}`, getToken),
-
-      regenerate: (repoId: string) =>
-        apiFetch<RepoPersona>(`/api/persona/${repoId}/regenerate`, getToken, {
-          method: "POST",
-        }),
-    },
-
-    // ── Billing ───────────────────────────────────────────────────────────────
-
-    pr: {
-      summarize: (prUrl: string, repoId?: string) =>
-        apiFetch<PRSummary>("/api/pr/summarize", getToken, {
-          method: "POST",
-          body: JSON.stringify({ prUrl, repoId }),
-        }),
-    },
-
-    billing: {
-      status: () =>
-        apiFetch<BillingStatus>("/api/stripe/status", getToken),
-
-      checkout: (plan: "pro" | "team") =>
-        apiFetch<CheckoutResponse>("/api/stripe/checkout", getToken, {
-          method: "POST",
-          body: JSON.stringify({ plan }),
-        }),
-
-      portal: () =>
-        apiFetch<CheckoutResponse>("/api/stripe/portal", getToken, {
-          method: "POST",
-        }),
     },
   };
 }

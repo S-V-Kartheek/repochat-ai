@@ -6,18 +6,14 @@ No API calls, no usage costs — runs on CPU or GPU.
 Phase 1 — Week 1 implementation.
 """
 
-from typing import TYPE_CHECKING
-
+from sentence_transformers import SentenceTransformer
 from app.config import settings
 
-if TYPE_CHECKING:
-    from sentence_transformers import SentenceTransformer
-
 # Model is loaded once at startup (singleton pattern to avoid repeated loading)
-_model: "SentenceTransformer | None" = None
+_model: SentenceTransformer | None = None
 
 
-def get_embedding_model() -> "SentenceTransformer":
+def get_embedding_model() -> SentenceTransformer:
     """
     Lazy-loads the embedding model on first call.
     Subsequent calls return the cached instance.
@@ -26,11 +22,9 @@ def get_embedding_model() -> "SentenceTransformer":
     global _model
     if _model is None:
         import torch
-        from sentence_transformers import SentenceTransformer
-
         device = settings.EMBEDDING_DEVICE
         if device == "cuda" and not torch.cuda.is_available():
-            print("CUDA requested but not available. Falling back to CPU for embeddings.")
+            print("⚠️ CUDA requested but not available. Falling back to CPU for embeddings.")
             device = "cpu"
         # Nomic models highly recommend trust_remote_code=True
         _model = SentenceTransformer(settings.EMBEDDING_MODEL, device=device, trust_remote_code=True)

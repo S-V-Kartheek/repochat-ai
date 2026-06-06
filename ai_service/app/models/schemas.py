@@ -3,7 +3,7 @@ Pydantic request/response models for the AI Service.
 Shared across all routers.
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 from typing import Optional
 
 
@@ -11,7 +11,7 @@ from typing import Optional
 # Ingestion
 # ---------------------------------------------------------------------------
 class IngestRequest(BaseModel):
-    repo_url: str = Field(..., json_schema_extra={"example": "https://github.com/tiangolo/fastapi"})
+    repo_url: str = Field(..., example="https://github.com/tiangolo/fastapi")
     languages: list[str] = Field(
         default=["python", "javascript", "typescript", "java", "go"],
         description="File extensions to include. Leave empty for all supported languages.",
@@ -31,7 +31,7 @@ class IngestResponse(BaseModel):
 # Query
 # ---------------------------------------------------------------------------
 class QueryRequest(BaseModel):
-    question: str = Field(..., json_schema_extra={"example": "Where is authentication handled?"})
+    question: str = Field(..., example="Where is authentication handled?")
     repo_id: str
     session_id: str
     history: list[dict] = Field(
@@ -50,8 +50,6 @@ class Citation(BaseModel):
 
 
 class QueryResponse(BaseModel):
-    model_config = ConfigDict(protected_namespaces=())
-
     answer: str
     citations: list[Citation]
     session_id: str
@@ -62,7 +60,7 @@ class QueryResponse(BaseModel):
 # Symbols
 # ---------------------------------------------------------------------------
 class SymbolRequest(BaseModel):
-    symbol_name: str = Field(..., json_schema_extra={"example": "authenticate"})
+    symbol_name: str = Field(..., example="authenticate")
     repo_id: str
 
 
@@ -82,43 +80,23 @@ class PersonaRequest(BaseModel):
     repo_url: str
 
 
-class SuggestedQuestion(BaseModel):
-    label: str           # Short label shown on chip, e.g. "Auth flow"
-    question: str        # Full question text injected into chat
-    category: str        # "architecture" | "implementation" | "debugging" | "onboarding"
-
-
 class PersonaResponse(BaseModel):
-    # Core identity
-    repo_name: str
+    stack: list[str]
     dominant_language: str
-    stack: list[str]                 # ["FastAPI", "Python 3.11", "Qdrant", ...]
     frameworks: list[str]
-    repo_type: str                   # "web-api" | "frontend" | "cli" | "library" | "monorepo"
-    architecture_style: str          # "MVC" | "microservices" | "layered" | etc.
-    expertise_level: str             # "beginner-friendly" | "intermediate" | "expert"
-
-    # Content
-    file_tree: str                   # ASCII tree of top-level structure
-    architecture_overview: str       # 2–3 paragraph description
-    onboarding_guide: str            # Markdown step-by-step guide
-    conventions: str                 # Detected code style / patterns
-    key_entry_points: list[str]      # Most important files to understand first
-
-    # Suggested questions
-    suggested_questions: list[SuggestedQuestion]
-
-    # Metrics
-    total_files: int
-    total_chunks: int
+    architecture_style: str
+    conventions: str
+    key_contributors: list[str]
+    onboarding_guide: str    # Markdown
+    architecture_overview: str  # Text-based diagram
 
 
 # ---------------------------------------------------------------------------
 # PR Summarizer
 # ---------------------------------------------------------------------------
 class PRRequest(BaseModel):
-    pr_url: str = Field(..., json_schema_extra={"example": "https://github.com/owner/repo/pull/42"})
-    repo_id: str = "standalone"
+    pr_url: str = Field(..., example="https://github.com/owner/repo/pull/42")
+    repo_id: str
 
 
 class PRResponse(BaseModel):

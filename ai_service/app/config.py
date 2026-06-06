@@ -3,19 +3,13 @@ RepoTalk AI Service — Configuration
 Loads environment variables with sensible defaults.
 """
 
+import os
+from pydantic_settings import BaseSettings
 from typing import Literal
-
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
-
-    model_config = SettingsConfigDict(
-        env_file="../.env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
 
     # --- App ---
     APP_NAME: str = "RepoTalk AI Service"
@@ -30,8 +24,7 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = "llama3.1:8b"
 
     # --- Embeddings ---
-    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
-    EMBEDDING_DIMENSION: int = 384
+    EMBEDDING_MODEL: str = "nomic-ai/nomic-embed-code-v1"
     EMBEDDING_DEVICE: str = "cpu"
 
     # --- Qdrant ---
@@ -49,5 +42,10 @@ class Settings(BaseSettings):
 
     # --- Paths ---
     REPOS_DIR: str = "./repos_cache"
+
+    class Config:
+        env_file = "../.env"
+        env_file_encoding = "utf-8"
+
 
 settings = Settings()

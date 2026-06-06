@@ -337,9 +337,9 @@ export default function IngestPage() {
                       onClick={() => toggleLanguage(opt.value)}
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border"
                       style={{
-                        background: active ? "var(--accent-soft)" : "#fff",
+                        background: active ? "var(--accent-muted)" : "#fff",
                         color: active ? "var(--accent)" : "var(--text-muted)",
-                        borderColor: active ? "var(--accent-soft-border)" : "var(--border)",
+                        borderColor: active ? "#bcd1ff" : "var(--border)",
                       }}
                       aria-pressed={active}
                     >

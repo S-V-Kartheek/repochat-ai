@@ -89,39 +89,6 @@ sessionRoutes.get("/", requireAuth, async (req, res) => {
 });
 
 /**
- * GET /api/sessions/bookmarks
- * Get all bookmarked messages across all sessions for the current user.
- */
-sessionRoutes.get("/bookmarks", requireAuth, async (req, res) => {
-  const userId = await ensureUser(req.userId!, req.userEmail);
-
-  const bookmarks = await prisma.message.findMany({
-    where: {
-      bookmarked: true,
-      session: { userId },
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      session: {
-        select: {
-          id: true,
-          title: true,
-          repo: { select: { id: true, name: true } },
-        },
-      },
-    },
-  });
-
-  res.json(
-    bookmarks.map((m) => ({
-      ...m,
-      citations: parseStoredCitations(m.citations),
-      ragasScore: m.ragasScore ? JSON.parse(m.ragasScore as string) : null,
-    }))
-  );
-});
-
-/**
  * GET /api/sessions/:sessionId
  * Get a session with all its messages.
  */

@@ -1,6 +1,6 @@
 // RepoTalk — Prisma Schema
-// Local development: SQLite, no external database required.
-// Production uses prisma/schema.production.prisma.
+// Local: SQLite (no setup required for development)
+// Production: switch provider to "postgresql" and set DATABASE_URL
 // Run: npx prisma db push
 
 generator client {
@@ -16,40 +16,34 @@ datasource db {
 // User — created/managed by Clerk
 // ─────────────────────────────────────────────
 model User {
-  id                String   @id @default(cuid())
-  clerkId           String   @unique
-  email             String   @unique
-  stripeCustomerId  String?  @unique
-  plan              String   @default("free")  // "free" | "pro" | "team"
-  planExpiresAt     DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  repos         Repo[]
-  sessions      Session[]
-  subscription  Subscription?
+  repos    Repo[]
+  sessions Session[]
 }
 
 // ─────────────────────────────────────────────
 // Repo — a connected GitHub repository
 // ─────────────────────────────────────────────
 model Repo {
-  id                 String   @id @default(cuid())
-  githubUrl          String
-  name               String                          // "owner/repo"
-  languages          String   @default("py,js,ts")  // comma-separated
-  framework          String?                         // "fastapi", "nextjs", etc.
-  conventions        String?                         // auto-detected style notes
-  status             String   @default("PENDING")    // PENDING | INGESTING | READY | ERROR
-  chunkCount         Int      @default(0)
-  errorMsg           String?
-  personaJson        String?  // Cached PersonaResponse as JSON string
-  personaGeneratedAt DateTime? // When persona was last generated
-  userId             String
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessions           Session[]
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id          String   @id @default(cuid())
+  githubUrl   String
+  name        String                          // "owner/repo"
+  languages   String   @default("py,js,ts")  // comma-separated, e.g. "py,js,ts"
+  framework   String?                         // "fastapi", "nextjs", etc.
+  conventions String?                         // auto-detected style notes
+  status      String   @default("PENDING")  // PENDING | INGESTING | READY | ERROR
+  chunkCount  Int        @default(0)
+  errorMsg    String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions    Session[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([userId])
   @@index([status])
@@ -92,23 +86,4 @@ model Message {
   @@index([bookmarked])
 }
 
-// ─────────────────────────────────────────────
-// Subscription — Stripe billing record
-// ─────────────────────────────────────────────
-model Subscription {
-  id                   String   @id @default(cuid())
-  userId               String   @unique
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stripeSubscriptionId String   @unique
-  stripePriceId        String
-  stripeCustomerId     String
-  status               String   // "active" | "canceled" | "past_due" | "trialing"
-  plan                 String   // "pro" | "team"
-  currentPeriodStart   DateTime
-  currentPeriodEnd     DateTime
-  cancelAtPeriodEnd    Boolean  @default(false)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
 
-  @@index([stripeSubscriptionId])
-}

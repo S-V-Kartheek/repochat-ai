@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { Citation, RagasScore } from "@/lib/types";
+import type { Citation } from "@/lib/types";
 
 interface StreamingTextProps {
   repoId: string;
   sessionId: string;
   question: string;
   getToken: () => Promise<string | null>;
-  onDone: (result: { answer: string; citations: Citation[]; messageId?: string; ragasScore?: RagasScore }) => void;
+  onDone: (result: { answer: string; citations: Citation[]; messageId?: string }) => void;
   onError?: (err: string) => void;
 }
 
@@ -35,27 +35,6 @@ function normalizeCitation(citation: unknown): Citation {
   };
 }
 
-function normalizeRagasScore(score: unknown): RagasScore | undefined {
-  if (!score || typeof score !== "object") return undefined;
-  const raw = score as Partial<RagasScore>;
-  const normalized: RagasScore = {
-    faithfulness: Number(raw.faithfulness),
-    answerRelevancy: Number(raw.answerRelevancy),
-    contextPrecision: Number(raw.contextPrecision),
-    overall: Number(raw.overall),
-    grade: raw.grade,
-  };
-  if (
-    Number.isFinite(normalized.faithfulness) &&
-    Number.isFinite(normalized.answerRelevancy) &&
-    Number.isFinite(normalized.contextPrecision) &&
-    Number.isFinite(normalized.overall)
-  ) {
-    return normalized;
-  }
-  return undefined;
-}
-
 /**
  * StreamingText — opens a POST fetch SSE stream to the gateway.
  * Renders tokens word-by-word with an animated cursor.
@@ -72,20 +51,8 @@ export default function StreamingText({
   const [text, setText] = useState("");
   const [streaming, setStreaming] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
-  const startedRef = useRef(false);
-  const doneRef = useRef(false);
-  const onDoneRef = useRef(onDone);
-  const onErrorRef = useRef(onError);
-
-  useEffect(() => {
-    onDoneRef.current = onDone;
-    onErrorRef.current = onError;
-  }, [onDone, onError]);
 
   const stream = useCallback(async () => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-
     const token = await getToken();
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -126,57 +93,37 @@ export default function StreamingText({
           const raw = trimmed.slice(5).trim();
           if (!raw) continue;
 
-          let event: {
-            token?: string;
-            done?: boolean;
-            citations?: unknown;
-            message_id?: unknown;
-            ragas_score?: unknown;
-            error?: string;
-          };
           try {
-            event = JSON.parse(raw);
-          } catch {
-            // Ignore non-JSON lines (keep-alive comments etc.)
-            continue;
-          }
+            const event = JSON.parse(raw);
 
-          if ("token" in event) {
-            fullAnswer += event.token;
-            setText((prev) => prev + event.token);
-          } else if (event.done) {
-            doneRef.current = true;
-            finalCitations = Array.isArray(event.citations)
-              ? event.citations.map(normalizeCitation)
-              : [];
-            setStreaming(false);
-            onDoneRef.current({
-              answer: fullAnswer,
-              citations: finalCitations,
-              messageId: typeof event.message_id === "string" ? event.message_id : undefined,
-              ragasScore: normalizeRagasScore(event.ragas_score),
-            });
-          } else if (event.error) {
-            throw new Error(event.error);
+            if ("token" in event) {
+              fullAnswer += event.token;
+              setText((prev) => prev + event.token);
+            } else if (event.done) {
+              finalCitations = Array.isArray(event.citations)
+                ? event.citations.map(normalizeCitation)
+                : [];
+              setStreaming(false);
+              onDone({
+                answer: fullAnswer,
+                citations: finalCitations,
+                messageId: typeof event.message_id === "string" ? event.message_id : undefined,
+              });
+            } else if (event.error) {
+              throw new Error(event.error);
+            }
+          } catch (parseErr) {
+            // Ignore non-JSON lines (keep-alive comments etc.)
           }
         }
-      }
-
-      if (!doneRef.current && fullAnswer.trim()) {
-        doneRef.current = true;
-        setStreaming(false);
-        onDoneRef.current({
-          answer: fullAnswer,
-          citations: finalCitations,
-        });
       }
     } catch (err: unknown) {
       if ((err as Error).name === "AbortError") return;
       setStreaming(false);
       const msg = err instanceof Error ? err.message : "Stream failed";
-      if (onErrorRef.current) onErrorRef.current(msg);
+      if (onError) onError(msg);
     }
-  }, [repoId, sessionId, question, getToken]);
+  }, [repoId, sessionId, question, getToken, onDone, onError]);
 
   useEffect(() => {
     stream();

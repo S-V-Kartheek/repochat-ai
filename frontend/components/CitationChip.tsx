@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Citation } from "@/lib/types";
 import { X, FileCode } from "lucide-react";
 
@@ -22,7 +22,7 @@ export function SnippetModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(17,24,39,0.4)", backdropFilter: "blur(4px)" }}
+      style={{ background: "rgba(15,23,42,0.45)", backdropFilter: "blur(4px)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
@@ -32,7 +32,7 @@ export function SnippetModal({
         className="w-full max-w-2xl rounded-xl overflow-hidden shadow-2xl fade-in"
         style={{
           background: "var(--code-bg)",
-          border: "1px solid var(--code-border)",
+          border: "1px solid #2f3a52",
           maxHeight: "80vh",
           display: "flex",
           flexDirection: "column",
@@ -45,14 +45,17 @@ export function SnippetModal({
         >
           <div className="flex items-center gap-2.5">
             <FileCode size={14} style={{ color: "var(--accent)" }} />
-            <span className="font-mono text-xs font-medium" style={{ color: "#e2e8f0" }}>
+            <span
+              className="font-mono text-xs font-medium"
+              style={{ color: "var(--text)" }}
+            >
               {citation.file}
             </span>
             <span
               className="text-xs px-2 py-0.5 rounded"
               style={{
-                background: "rgba(255,255,255,0.08)",
-                color: "#94a3b8",
+                background: "var(--surface-3)",
+                color: "var(--text-muted)",
                 fontFamily: "var(--font-mono)",
               }}
             >
@@ -63,7 +66,6 @@ export function SnippetModal({
             onClick={onClose}
             className="btn btn-ghost btn-sm"
             aria-label="Close snippet"
-            style={{ color: "#94a3b8" }}
           >
             <X size={14} />
           </button>
@@ -71,7 +73,7 @@ export function SnippetModal({
 
         {/* Code */}
         <div className="overflow-auto flex-1 p-5">
-          <pre className="font-mono text-sm leading-relaxed" style={{ color: "var(--code-text)", margin: 0 }}>
+          <pre className="font-mono text-sm leading-relaxed" style={{ color: "#c4cfe8", margin: 0 }}>
             <code>{citation.snippet}</code>
           </pre>
         </div>
@@ -97,9 +99,9 @@ export default function CitationChip({ citation, index }: CitationChipProps) {
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all"
         style={{
-          background: "var(--accent-soft)",
-          color: "var(--accent)",
-          border: "1px solid var(--accent-soft-border)",
+          background: "#ecf3ff",
+          color: "#1d4ed8",
+          border: "1px solid #cadcff",
           cursor: "pointer",
         }}
         title={`${citation.file}:${citation.startLine}-${citation.endLine}`}
@@ -108,8 +110,8 @@ export default function CitationChip({ citation, index }: CitationChipProps) {
         <span
           className="font-sans text-[10px] px-1 py-px rounded"
           style={{
-            background: "var(--accent-soft-border)",
-            color: "var(--accent)",
+            background: "#dbe8ff",
+            color: "#1d4ed8",
           }}
         >
           {index + 1}
