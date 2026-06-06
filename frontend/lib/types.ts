@@ -97,3 +97,12 @@ export interface CreateRepoResponse {
   status: string;
   message: string;
 }
+
+export interface BillingStatus {
+  plan: string;
+  subscription?: {
+    status: string;
+    currentPeriodEnd: string;
+    cancelAtPeriodEnd: boolean;
+  };
+}
