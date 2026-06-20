@@ -42,6 +42,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package.json ./
 
+RUN chown -R appuser:appgroup /app
+
 USER appuser
 
 ENV NODE_ENV=production

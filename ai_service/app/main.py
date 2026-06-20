@@ -29,11 +29,11 @@ async def lifespan(app: FastAPI):
     # Startup: ensure Qdrant collection is ready
     try:
         await ensure_collection_exists()
-        print("✅ Qdrant collection ready")
+        print("[OK] Qdrant collection ready")
     except Exception as e:
-        print(f"⚠️  Qdrant connection failed (will retry on first request): {e}")
+        print(f"[WARNING] Qdrant connection failed (will retry on first request): {e}")
 
-    print(f"✅ LLM provider: {settings.LLM_PROVIDER} → {get_provider_info()['model']}")
+    print(f"[OK] LLM provider: {settings.LLM_PROVIDER} -> {get_provider_info()['model']}")
     yield
     # Shutdown: nothing to clean up (yet)
 

@@ -32,12 +32,12 @@ async def run_ingestion_pipeline(repo_id: str, repo_url: str, languages: list[st
             "progress_pct": 0.0
         }
         
-        # 1. Clone
-        repo_path = repo_cloner.clone_repo(repo_url, repo_id)
+        # 1. Clone — run in thread pool so event loop stays responsive during git clone
+        repo_path = await asyncio.to_thread(repo_cloner.clone_repo, repo_url, repo_id)
         
-        # 2. Get files
+        # 2. Get files — also sync I/O, run in thread pool
         INGEST_STATUS[repo_id].update({"status": "parsing", "current_stage": "Parsing files..."})
-        files = repo_cloner.get_repo_files(repo_path, language_filter=languages)
+        files = await asyncio.to_thread(repo_cloner.get_repo_files, repo_path, languages)
         
         # Ensure collection exists before doing heavy lifting
         await vector_store.ensure_collection_exists()

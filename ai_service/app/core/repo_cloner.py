@@ -13,6 +13,13 @@ from app.config import settings
 
 CLONE_BASE_DIR = Path(settings.REPOS_DIR)
 
+PLACEHOLDER_TOKEN_PARTS = (
+    "your_",
+    "token_here",
+    "placeholder",
+    "github_token",
+)
+
 # Excluded directories and file patterns
 EXCLUDED_DIRS = {
     "node_modules", ".git", "__pycache__", "dist", "build",
@@ -38,8 +45,10 @@ def clone_repo(repo_url: str, repo_id: str) -> Path:
         CLONE_BASE_DIR.mkdir(parents=True, exist_ok=True)
     
     auth_url = repo_url
-    if settings.GITHUB_TOKEN and repo_url.startswith("https://"):
-        auth_url = repo_url.replace("https://", f"https://oauth2:{settings.GITHUB_TOKEN}@")
+    github_token = settings.GITHUB_TOKEN.strip()
+    is_placeholder_token = any(part in github_token.lower() for part in PLACEHOLDER_TOKEN_PARTS)
+    if github_token and not is_placeholder_token and repo_url.startswith("https://"):
+        auth_url = repo_url.replace("https://", f"https://oauth2:{github_token}@")
     
     try:
         if repo_path.exists() and (repo_path / ".git").exists():

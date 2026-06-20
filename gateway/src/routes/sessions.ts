@@ -89,6 +89,42 @@ sessionRoutes.get("/", requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/sessions/bookmarks
+ * Get all bookmarked messages across all sessions for the user.
+ * IMPORTANT: must be declared before GET /:sessionId to avoid wildcard collision.
+ */
+sessionRoutes.get("/bookmarks", requireAuth, async (req, res) => {
+  const userId = await ensureUser(req.userId!, req.userEmail);
+
+  const messages = await prisma.message.findMany({
+    where: {
+      bookmarked: true,
+      session: { userId },
+    },
+    include: {
+      session: {
+        select: {
+          id: true,
+          title: true,
+          repo: {
+            select: { id: true, name: true },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  res.json(
+    messages.map((m) => ({
+      ...m,
+      citations: parseStoredCitations(m.citations),
+      ragasScore: m.ragasScore ? JSON.parse(m.ragasScore as string) : null,
+    }))
+  );
+});
+
+/**
  * GET /api/sessions/:sessionId
  * Get a session with all its messages.
  */
@@ -206,40 +242,7 @@ sessionRoutes.post("/:sessionId/messages", requireAuth, async (req, res) => {
   });
 });
 
-/**
- * GET /api/sessions/bookmarks
- * Get all bookmarked messages across all sessions for the user.
- */
-sessionRoutes.get("/bookmarks", requireAuth, async (req, res) => {
-  const userId = await ensureUser(req.userId!, req.userEmail);
 
-  const messages = await prisma.message.findMany({
-    where: {
-      bookmarked: true,
-      session: { userId },
-    },
-    include: {
-      session: {
-        select: {
-          id: true,
-          title: true,
-          repo: {
-            select: { id: true, name: true },
-          },
-        },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  res.json(
-    messages.map((m) => ({
-      ...m,
-      citations: parseStoredCitations(m.citations),
-      ragasScore: m.ragasScore ? JSON.parse(m.ragasScore as string) : null,
-    }))
-  );
-});
 
 /**
  * PATCH /api/sessions/:sessionId/messages/:messageId/bookmark

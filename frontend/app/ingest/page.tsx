@@ -284,6 +284,11 @@ export default function IngestPage() {
                     <div className="mt-1.5">
                       <RepoStatusBadge status={repo.status} chunkCount={repo.chunkCount} />
                     </div>
+                    {repo.status === "ERROR" && repo.errorMsg ? (
+                      <p className="mt-1 text-xs line-clamp-2" style={{ color: "var(--error)" }}>
+                        {repo.errorMsg}
+                      </p>
+                    ) : null}
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDelete(repo.id); }}

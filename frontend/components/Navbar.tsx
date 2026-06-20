@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton, SignInButton } from "@clerk/nextjs";
-import { Sparkles, MessageSquare, LayoutDashboard } from "lucide-react";
+import { Sparkles, MessageSquare, LayoutDashboard, Bookmark } from "lucide-react";
 
 const NAV_LINKS = [
   { href: "/ingest", label: "Repos", icon: LayoutDashboard },
+  { href: "/bookmarks", label: "Bookmarks", icon: Bookmark },
 ];
 
 export default function Navbar() {

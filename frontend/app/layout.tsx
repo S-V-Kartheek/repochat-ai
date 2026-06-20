@@ -31,7 +31,7 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
-        <body className={inter.variable} style={{ fontFamily: "var(--font-sans)" }}>
+        <body className={inter.variable} style={{ fontFamily: "var(--font-sans)" }} suppressHydrationWarning>
           <Navbar />
           <div
             style={{

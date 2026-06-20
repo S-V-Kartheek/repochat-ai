@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Send, Loader2, BookmarkCheck, Bookmark, AlertTriangle } from "lucide-react";
 import { createApiClient } from "@/lib/api";
@@ -89,14 +89,25 @@ function StreamingBubble({
   question,
   getToken,
   onDone,
+  onError,
+  abortSignal,
 }: {
   repoId: string;
   sessionId: string;
   question: string;
   getToken: () => Promise<string | null>;
   onDone: (result: { answer: string; citations: Citation[]; messageId?: string }) => void;
+  onError: (err: string) => void;
+  abortSignal: AbortSignal;
 }) {
   const [streamError, setStreamError] = useState<string | null>(null);
+
+  // Always propagate the error to the parent so it can reset streaming=false,
+  // otherwise the textarea stays permanently disabled.
+  const handleError = (err: string) => {
+    setStreamError(err);
+    onError(err);
+  };
 
   return (
     <div className="flex justify-start mb-6 slide-up">
@@ -124,7 +135,8 @@ function StreamingBubble({
               question={question}
               getToken={getToken}
               onDone={onDone}
-              onError={setStreamError}
+              onError={handleError}
+              abortSignal={abortSignal}
             />
           )}
         </div>
@@ -157,27 +169,97 @@ export default function ChatPanel({
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const api = createApiClient(getToken);
+  // ── Stable API client — created once, never on every render ──────────────────
+  const api = useMemo(() => createApiClient(getToken), [getToken]);
+
+  // ── Phase 1: Synchronous submit guard ────────────────────────────────────────
+  // useRef gives us a synchronous, render-independent flag. We set it to true
+  // before any await, so rapid Enter presses / double-clicks see it immediately
+  // and bail out — no waiting for React to re-render with streaming=true.
+  const isSubmittingRef = useRef(false);
+
+  // ── Phase 1: Unique stream key per submit ────────────────────────────────────
+  // Using a counter instead of question text prevents React from reusing the
+  // StreamingBubble when the same question is sent twice in a row.
+  const streamKeyRef = useRef(0);
+  const [streamKey, setStreamKey] = useState(0);
+
+  // ── Phase 1: AbortController for in-flight stream ───────────────────────────
+  // Stored in a ref so it can be accessed synchronously from effects.
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // ── Phase 1: Track which session this panel is currently showing ─────────────
+  // Prevents onDone from a stale stream from appending to the wrong session.
+  const activeSessionIdRef = useRef(session.id);
+  useEffect(() => {
+    activeSessionIdRef.current = session.id;
+  }, [session.id]);
 
   // Auto-scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streaming]);
 
-  // Sync messages when session changes
+  // ── Phase 1: Abort + reset on session switch ─────────────────────────────────
+  // When the user clicks a different session mid-stream, kill the old stream
+  // immediately and reset all streaming state so the new session starts clean.
   useEffect(() => {
-    setMessages(session.messages ?? []);
-  }, [session.id, session.messages]);
+    // This effect runs when session.id changes (i.e. user switches sessions).
+    // Abort any in-flight stream from the previous session.
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
 
-  const handleSubmit = async (e?: React.FormEvent) => {
+    // Reset streaming state so the textarea re-enables for the new session.
+    isSubmittingRef.current = false;
+    setStreaming(false);
+    setStreamingQuestion(null);
+    setError(null);
+
+    // Sync messages to the new session
+    setMessages(session.messages ?? []);
+  }, [session.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Note: session.messages is intentionally excluded — we only want this heavy
+  // reset on session ID changes. Incremental message updates come from handleStreamDone.
+
+  // ── Phase 1: Abort on component unmount ─────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+      isSubmittingRef.current = false;
+    };
+  }, []);
+
+  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();
+
     const question = input.trim();
-    if (!question || streaming) return;
+    if (!question) return;
+
+    // ── SYNCHRONOUS guard — checked before any state update or await ──────────
+    // This is the key fix for CP-02 / CP-03: `streaming` state update is async
+    // (batched), so rapid Enter presses can pass the state check before React
+    // re-renders. The ref is synchronous — it's set and read atomically in the
+    // same JS call stack, so only the very first call goes through.
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
 
     setInput("");
     setError(null);
     setStreaming(true);
+
+    // Bump the stream key — guarantees React re-mounts StreamingBubble even if
+    // the same question is submitted twice in a row (fixes CP-07).
+    streamKeyRef.current += 1;
+    const thisStreamKey = streamKeyRef.current;
+    setStreamKey(thisStreamKey);
     setStreamingQuestion(question);
+
+    // Create a fresh AbortController for this stream.
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    // Capture the session we're submitting for.
+    const submittedSessionId = session.id;
 
     // Optimistic user message
     const optimisticUser: Message = {
@@ -187,13 +269,13 @@ export default function ChatPanel({
       citations: null,
       ragasScore: null,
       bookmarked: false,
-      sessionId: session.id,
+      sessionId: submittedSessionId,
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimisticUser]);
-  };
+  }, [input, session.id]);
 
-  const handleStreamDone = async ({
+  const handleStreamDone = useCallback(({
     answer,
     citations,
     messageId,
@@ -202,8 +284,15 @@ export default function ChatPanel({
     citations: Citation[];
     messageId?: string;
   }) => {
+    // ── Guard: ignore done events from stale streams ──────────────────────────
+    // If the user switched sessions while this stream was in-flight, the
+    // activeSessionIdRef will have moved on. Drop this result silently.
+    if (activeSessionIdRef.current !== session.id) return;
+
+    // Always clear streaming state so the textarea re-enables immediately.
     setStreaming(false);
     setStreamingQuestion(null);
+    isSubmittingRef.current = false;
 
     const assistantMsg: Message = {
       id: messageId ?? `local-${Date.now()}`,
@@ -215,13 +304,29 @@ export default function ChatPanel({
       sessionId: session.id,
       createdAt: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, assistantMsg]);
 
-    // The gateway persists both user and assistant messages for streaming.
-    // Refresh parent session state to replace optimistic user message and keep
-    // IDs/bookmarks in sync with DB.
+    // Replace the optimistic user message + add the real assistant message.
+    // We keep our local messages intact (don't wait for session refresh) to
+    // avoid the optimistic-message-vs-refresh race (CP-05).
+    setMessages((prev) => {
+      // Strip the optimistic user message — the server version will arrive
+      // on the next session refresh via onSessionUpdate.
+      const withoutOptimistic = prev.filter((m) => !m.id.startsWith("optimistic-"));
+      return [...withoutOptimistic, assistantMsg];
+    });
+
+    // Refresh parent session (fire-and-forget) — syncs DB IDs and bookmarks.
     onSessionUpdate?.();
-  };
+  }, [session.id, onSessionUpdate]);
+
+  // Called when the stream fails — always resets streaming so the textarea
+  // re-enables. The error is also shown inside the StreamingBubble.
+  const handleStreamError = useCallback((errMsg: string) => {
+    setStreaming(false);
+    setStreamingQuestion(null);
+    isSubmittingRef.current = false;
+    setError(errMsg);
+  }, []);
 
   const handleToggleBookmark = async (messageId: string) => {
     setMessages((prev) =>
@@ -237,7 +342,11 @@ export default function ChatPanel({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      // Belt-and-suspenders: explicit streaming guard here in addition to the
+      // ref-based guard in handleSubmit (CP-06).
+      if (!isSubmittingRef.current) {
+        handleSubmit();
+      }
     }
   };
 
@@ -290,14 +399,16 @@ export default function ChatPanel({
               />
             ))}
             {/* Streaming in progress */}
-            {streaming && streamingQuestion && (
+            {streaming && streamingQuestion && abortControllerRef.current && (
               <StreamingBubble
-                key={`streaming-${streamingQuestion}`}
+                key={`streaming-${streamKey}`}
                 repoId={repoId}
                 sessionId={session.id}
                 question={streamingQuestion}
                 getToken={getToken}
                 onDone={handleStreamDone}
+                onError={handleStreamError}
+                abortSignal={abortControllerRef.current.signal}
               />
             )}
           </div>
@@ -342,7 +453,8 @@ export default function ChatPanel({
             aria-label="Chat input"
           />
           <button
-            type="submit"
+            type="button"
+            onClick={() => handleSubmit()}
             className="btn btn-primary flex-shrink-0"
             disabled={streaming || !input.trim()}
             aria-label="Send message"

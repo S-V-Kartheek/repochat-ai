@@ -14,21 +14,27 @@ from app.core.chunker import Chunk
 # Collection Config
 # ---------------------------------------------------------------------------
 COLLECTION_NAME = settings.QDRANT_COLLECTION
-VECTOR_SIZE = 768          # nomic-embed-code-v1 output dimension
+VECTOR_SIZE = settings.EMBEDDING_DIMENSION  # matches the embedding model in .env
 DISTANCE = rest.Distance.COSINE
 
 # ---------------------------------------------------------------------------
-# Client (singleton)
+# Client (singleton) — uses local embedded Qdrant (no server required)
 # ---------------------------------------------------------------------------
 _client: AsyncQdrantClient | None = None
 
 
 async def get_qdrant_client() -> AsyncQdrantClient:
-    """Lazy-initialize the Qdrant async client (singleton)."""
+    """Lazy-initialize the Qdrant async client (singleton).
+    
+    Uses local embedded mode (path=QDRANT_LOCAL_PATH) when QDRANT_URL is
+    a localhost address — no server process needed.
+    For cloud/remote Qdrant, set QDRANT_URL to a non-localhost URL.
+    """
     global _client
     if _client is None:
-        if settings.QDRANT_URL.startswith("http://localhost"):
-            _client = AsyncQdrantClient(url=settings.QDRANT_URL)
+        if settings.QDRANT_URL.startswith("http://localhost") or settings.QDRANT_URL.startswith("http://127.0.0.1"):
+            # Embedded local mode — stores data in .qdrant_local directory
+            _client = AsyncQdrantClient(path=settings.QDRANT_LOCAL_PATH)
         else:
             _client = AsyncQdrantClient(
                 url=settings.QDRANT_URL,

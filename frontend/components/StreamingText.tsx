@@ -10,6 +10,8 @@ interface StreamingTextProps {
   getToken: () => Promise<string | null>;
   onDone: (result: { answer: string; citations: Citation[]; messageId?: string }) => void;
   onError?: (err: string) => void;
+  // External abort signal — parent sets this to cancel mid-stream (session switch/unmount)
+  abortSignal?: AbortSignal;
 }
 
 const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:4000";
@@ -37,8 +39,12 @@ function normalizeCitation(citation: unknown): Citation {
 
 /**
  * StreamingText — opens a POST fetch SSE stream to the gateway.
- * Renders tokens word-by-word with an animated cursor.
- * Calls onDone when the final "done" event arrives.
+ *
+ * Key stability fixes (Phase 1):
+ *  1. onDone / onError stored in refs — never trigger useEffect re-runs.
+ *  2. mounted ref — prevents setState after unmount (avoids React Strict Mode double-fire).
+ *  3. Accepts an external abortSignal from ChatPanel so the parent can cancel
+ *     the stream on session switch or navigation away.
  */
 export default function StreamingText({
   repoId,
@@ -47,30 +53,78 @@ export default function StreamingText({
   getToken,
   onDone,
   onError,
+  abortSignal,
 }: StreamingTextProps) {
   const [text, setText] = useState("");
   const [streaming, setStreaming] = useState(true);
-  const abortRef = useRef<AbortController | null>(null);
+
+  // ── Stable refs for callbacks — never listed as useCallback/useEffect deps ──
+  // This is the core fix: callback props change identity every render (new
+  // function ref), which would cause the useCallback to recreate stream() and
+  // the useEffect to re-fire, opening a second SSE connection. Storing them in
+  // refs gives us a stable reference while still calling the latest version.
+  const onDoneRef  = useRef(onDone);
+  const onErrorRef = useRef(onError);
+  useEffect(() => { onDoneRef.current  = onDone;  }, [onDone]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+
+  // Tracks whether this component instance is still mounted.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Internal abort controller — merged with the parent's signal if provided.
+  const internalAbortRef = useRef<AbortController | null>(null);
 
   const stream = useCallback(async () => {
+    // Create a fresh internal controller for this run.
+    const controller = new AbortController();
+    internalAbortRef.current = controller;
+
+    // Merge parent's abort signal: if parent aborts, abort ours too.
+    if (abortSignal) {
+      if (abortSignal.aborted) {
+        controller.abort();
+      } else {
+        abortSignal.addEventListener("abort", () => controller.abort(), { once: true });
+      }
+    }
+
     const token = await getToken();
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    abortRef.current = new AbortController();
-
     try {
-      const res = await fetch(`${GATEWAY}/api/chat/stream`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ repoId, sessionId, question, topK: 5 }),
-        signal: abortRef.current.signal,
-      });
+      let res: Response | null = null;
+      let attempt = 0;
+      const maxAttempts = 3;
 
-      if (!res.ok || !res.body) {
-        throw new Error(`Stream error: HTTP ${res.status}`);
+      while (attempt < maxAttempts) {
+        attempt++;
+        res = await fetch(`${GATEWAY}/api/chat/stream`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ repoId, sessionId, question, topK: 5 }),
+          signal: controller.signal,
+        });
+
+        // Phase 1 Fix: In React 18 Strict Mode, components mount, unmount (aborting fetch),
+        // and remount immediately. If the server takes a few ms to process the abort and release
+        // the activeStreams lock, the second mount's fetch hits a 409 Conflict.
+        // We catch 409s here and retry with exponential backoff to smooth over this race condition.
+        if (res.status === 409 && attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 300 * attempt));
+          continue;
+        }
+        break;
+      }
+
+      if (!res || !res.ok || !res.body) {
+        throw new Error(`Stream error: HTTP ${res?.status || "Unknown"}`);
       }
 
       const reader = res.body.getReader();
@@ -98,13 +152,19 @@ export default function StreamingText({
 
             if ("token" in event) {
               fullAnswer += event.token;
-              setText((prev) => prev + event.token);
+              // Guard: don't update state after unmount
+              if (mountedRef.current) {
+                setText((prev) => prev + event.token);
+              }
             } else if (event.done) {
               finalCitations = Array.isArray(event.citations)
                 ? event.citations.map(normalizeCitation)
                 : [];
-              setStreaming(false);
-              onDone({
+              if (mountedRef.current) {
+                setStreaming(false);
+              }
+              // Call the latest version of onDone via ref — always safe
+              onDoneRef.current({
                 answer: fullAnswer,
                 citations: finalCitations,
                 messageId: typeof event.message_id === "string" ? event.message_id : undefined,
@@ -113,21 +173,30 @@ export default function StreamingText({
               throw new Error(event.error);
             }
           } catch (parseErr) {
-            // Ignore non-JSON lines (keep-alive comments etc.)
+            // Ignore non-JSON keepalive lines
           }
         }
       }
     } catch (err: unknown) {
-      if ((err as Error).name === "AbortError") return;
-      setStreaming(false);
+      if ((err as Error).name === "AbortError") {
+        // Clean abort — no error shown; parent is handling state reset
+        if (mountedRef.current) setStreaming(false);
+        return;
+      }
+      if (mountedRef.current) setStreaming(false);
       const msg = err instanceof Error ? err.message : "Stream failed";
-      if (onError) onError(msg);
+      onErrorRef.current?.(msg);
     }
-  }, [repoId, sessionId, question, getToken, onDone, onError]);
+  // ⚠️  Only stable, primitive values here — NOT onDone/onError.
+  // Those are read via refs inside the function so they don't trigger re-runs.
+  }, [repoId, sessionId, question, getToken, abortSignal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     stream();
-    return () => { abortRef.current?.abort(); };
+    // Cleanup: abort the internal controller on unmount or if deps change
+    return () => {
+      internalAbortRef.current?.abort();
+    };
   }, [stream]);
 
   return (
