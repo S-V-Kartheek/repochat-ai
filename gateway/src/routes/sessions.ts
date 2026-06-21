@@ -278,3 +278,35 @@ sessionRoutes.patch(
     });
   }
 );
+
+/**
+ * PATCH /api/sessions/:sessionId
+ * Rename a session (update its title).
+ */
+sessionRoutes.patch("/:sessionId", requireAuth, async (req, res) => {
+  const userId = await ensureUser(req.userId!, req.userEmail);
+  const { title } = req.body;
+
+  if (typeof title !== "string" || !title.trim()) {
+    res.status(400).json({ error: "title must be a non-empty string" });
+    return;
+  }
+
+  const session = await prisma.session.findFirst({
+    where: { id: req.params.sessionId, userId },
+    select: { id: true },
+  });
+
+  if (!session) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+
+  const updated = await prisma.session.update({
+    where: { id: session.id },
+    data: { title: title.trim().slice(0, 100) },
+  });
+
+  res.json(updated);
+});
+

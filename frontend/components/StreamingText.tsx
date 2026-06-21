@@ -12,6 +12,8 @@ interface StreamingTextProps {
   onError?: (err: string) => void;
   // External abort signal — parent sets this to cancel mid-stream (session switch/unmount)
   abortSignal?: AbortSignal;
+  // Optional live token callback — lets parent render streaming markdown
+  onToken?: (accumulated: string) => void;
 }
 
 const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:4000";
@@ -54,6 +56,7 @@ export default function StreamingText({
   onDone,
   onError,
   abortSignal,
+  onToken,
 }: StreamingTextProps) {
   const [text, setText] = useState("");
   const [streaming, setStreaming] = useState(true);
@@ -155,6 +158,7 @@ export default function StreamingText({
               // Guard: don't update state after unmount
               if (mountedRef.current) {
                 setText((prev) => prev + event.token);
+                onToken?.(fullAnswer);
               }
             } else if (event.done) {
               finalCitations = Array.isArray(event.citations)

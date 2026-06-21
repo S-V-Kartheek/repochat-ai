@@ -92,6 +92,12 @@ export function createApiClient(getToken: () => Promise<string | null>) {
           method: "DELETE",
         }),
 
+      rename: (sessionId: string, title: string) =>
+        apiFetch<Session>(`/api/sessions/${sessionId}`, getToken, {
+          method: "PATCH",
+          body: JSON.stringify({ title }),
+        }),
+
       saveMessage: (
         sessionId: string,
         role: "USER" | "ASSISTANT",
