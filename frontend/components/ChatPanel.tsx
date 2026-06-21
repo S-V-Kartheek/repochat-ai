@@ -59,9 +59,29 @@ function MessageBubble({
           </div>
         )}
 
-        {/* Bookmark */}
+        {/* Actions row: Eval Score + Bookmark */}
         {!isUser && (
-          <div className="flex justify-end">
+          <div className="flex justify-between items-center pt-2 mt-2" style={{ borderTop: "1px dashed var(--border)" }}>
+            {/* RAGAS Eval Score */}
+            {message.ragasScore ? (
+              <div
+                className="text-[11px] font-medium px-2 py-0.5 rounded-full flex gap-1.5 items-center cursor-help"
+                style={{
+                  background: message.ragasScore.overall === "high" ? "var(--success-muted)" : message.ragasScore.overall === "medium" ? "var(--warning-muted)" : "var(--error-muted)",
+                  color: message.ragasScore.overall === "high" ? "var(--success)" : message.ragasScore.overall === "medium" ? "var(--warning)" : "var(--error)",
+                  border: `1px solid ${message.ragasScore.overall === "high" ? "var(--success)" : message.ragasScore.overall === "medium" ? "var(--warning)" : "var(--error)"}40`
+                }}
+                title={`Faithfulness: ${message.ragasScore.faithfulness}\nRelevancy: ${message.ragasScore.answerRelevancy}\nContext Precision: ${message.ragasScore.contextPrecision}`}
+              >
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: "currentColor" }} />
+                Eval: {message.ragasScore.overall?.toUpperCase()}
+              </div>
+            ) : (
+              <div className="text-[11px] px-2 py-0.5 rounded-full" style={{ color: "var(--text-faint)", background: "var(--surface-3)" }}>
+                Evaluating...
+              </div>
+            )}
+
             <button
               onClick={() => onToggleBookmark(message.id)}
               className="btn btn-ghost btn-sm"
@@ -69,9 +89,9 @@ function MessageBubble({
               title={message.bookmarked ? "Remove bookmark" : "Bookmark"}
             >
               {message.bookmarked ? (
-                <BookmarkCheck size={13} style={{ color: "var(--accent)" }} />
+                <BookmarkCheck size={14} style={{ color: "var(--accent)" }} />
               ) : (
-                <Bookmark size={13} />
+                <Bookmark size={14} style={{ color: "var(--text-muted)" }} />
               )}
             </button>
           </div>
@@ -228,6 +248,41 @@ export default function ChatPanel({
       isSubmittingRef.current = false;
     };
   }, []);
+
+  // ── Phase 1: Poll for RAGAS evaluation scores ───────────────────────────────
+  // Since evaluation runs in the background and completes after the stream ends,
+  // we poll the session API lightly if any displayed assistant message is missing its score.
+  useEffect(() => {
+    const needsPolling = messages.some((m) => m.role === "ASSISTANT" && !m.ragasScore && !m.id.startsWith("optimistic"));
+    if (!needsPolling) return;
+
+    let isPolling = true;
+
+    const poll = async () => {
+      if (!isPolling) return;
+      try {
+        const updatedSession = await api.sessions.get(session.id);
+        if (!isPolling) return;
+        
+        // Only update if we actually got new scores to avoid unnecessary re-renders
+        const newScoreCount = updatedSession.messages?.filter(m => m.role === "ASSISTANT" && m.ragasScore).length ?? 0;
+        const oldScoreCount = messages.filter(m => m.role === "ASSISTANT" && m.ragasScore).length;
+
+        if (newScoreCount > oldScoreCount) {
+          setMessages(updatedSession.messages ?? []);
+        }
+      } catch (err) {
+        // Silently ignore polling errors
+      }
+    };
+
+    const interval = setInterval(poll, 3000);
+
+    return () => {
+      isPolling = false;
+      clearInterval(interval);
+    };
+  }, [messages, session.id, api]);
 
   const handleSubmit = useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();

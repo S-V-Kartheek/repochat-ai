@@ -61,7 +61,7 @@ export interface RagasScore {
   faithfulness?: number;
   answerRelevancy?: number;
   contextPrecision?: number;
-  overall?: number;
+  overall?: "high" | "medium" | "low" | string;
 }
 
 export interface Message {
