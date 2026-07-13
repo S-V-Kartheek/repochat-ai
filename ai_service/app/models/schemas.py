@@ -75,20 +75,34 @@ class SymbolResult(BaseModel):
 # ---------------------------------------------------------------------------
 # Persona
 # ---------------------------------------------------------------------------
+class SuggestedQuestion(BaseModel):
+    id: str
+    question: str
+    category: str   # "architecture" | "implementation" | "debugging" | "onboarding"
+    label: Optional[str] = None
+
+
 class PersonaRequest(BaseModel):
     repo_id: str
     repo_url: str
+    repo_name: str = ""
 
 
 class PersonaResponse(BaseModel):
-    stack: list[str]
+    repo_name: str
+    repo_type: str              # "web-api" | "frontend" | "cli" | "library" | "monorepo" | "ml-model" | "unknown"
     dominant_language: str
-    frameworks: list[str]
-    architecture_style: str
-    conventions: str
-    key_contributors: list[str]
-    onboarding_guide: str    # Markdown
-    architecture_overview: str  # Text-based diagram
+    architecture_style: str     # "monolith" | "microservices" | "MVC" | "RAG" | "serverless" | etc.
+    expertise_level: str        # "beginner-friendly" | "intermediate" | "expert"
+    frameworks: list[str] = []
+    stack: list[str] = []
+    architecture_overview: str = ""
+    key_entry_points: list[str] = []
+    total_files: int = 0
+    total_chunks: int = 0
+    suggested_questions: list[SuggestedQuestion] = []
+    onboarding_guide: str = ""
+    file_tree: str = ""
 
 
 # ---------------------------------------------------------------------------

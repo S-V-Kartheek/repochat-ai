@@ -12,11 +12,15 @@ import {
   Loader2,
   RefreshCw,
   ChevronRight,
+  LayoutDashboard,
+  Link2,
+  Code2,
 } from "lucide-react";
 import { createApiClient } from "@/lib/api";
-import type { Repo, IngestStatus } from "@/lib/types";
+import type { Repo, IngestStatus, RepoPersona } from "@/lib/types";
+import RepoIdentityCard, { RepoIdentityCardSkeleton } from "@/components/RepoIdentityCard";
 
-// ── Language toggles ────────────────────────────────────────────────────────
+// ── Language toggles ─────────────────────────────────────────────────────────
 
 const LANGUAGE_OPTIONS = [
   { value: "py",   label: "Python" },
@@ -31,39 +35,21 @@ const LANGUAGE_OPTIONS = [
   { value: "css",  label: "CSS" },
 ];
 
-// ── Status Badge ─────────────────────────────────────────────────────────────
+// ── Status Badge ──────────────────────────────────────────────────────────────
 
-function RepoStatusBadge({
-  status,
-  chunkCount,
-}: {
-  status: Repo["status"];
-  chunkCount: number;
-}) {
+function RepoStatusBadge({ status, chunkCount }: { status: Repo["status"]; chunkCount: number }) {
   if (status === "INGESTING")
-    return (
-      <span className="badge badge-blue">
-        <Loader2 size={10} className="animate-spin" /> Indexing
-      </span>
-    );
+    return <span className="badge badge-blue"><Loader2 size={10} className="animate-spin" /> Indexing</span>;
   if (status === "READY" && chunkCount < 10)
-    return (
-      <span className="badge badge-amber">
-        <AlertTriangle size={10} /> Sparse Index ({chunkCount} chunks)
-      </span>
-    );
+    return <span className="badge badge-amber"><AlertTriangle size={10} /> Sparse ({chunkCount})</span>;
   if (status === "READY")
-    return (
-      <span className="badge badge-green">
-        <CheckCircle size={10} /> Ready · {chunkCount} chunks
-      </span>
-    );
+    return <span className="badge badge-green"><CheckCircle size={10} /> Ready · {chunkCount} chunks</span>;
   if (status === "ERROR")
     return <span className="badge badge-red">Error</span>;
   return <span className="badge badge-gray">Pending</span>;
 }
 
-// ── Ingestion Progress Card ──────────────────────────────────────────────────
+// ── Ingestion Progress ────────────────────────────────────────────────────────
 
 function IngestionProgress({
   repoId,
@@ -92,43 +78,140 @@ function IngestionProgress({
         setError(e instanceof Error ? e.message : "Status check failed");
       }
     };
-
     poll();
     intervalRef.current = setInterval(poll, 3000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [repoId]); // eslint-disable-line
 
-  if (error) return <p className="text-sm" style={{ color: "var(--error)" }}>{error}</p>;
-  if (!status) return <p className="text-sm" style={{ color: "var(--text-muted)" }}>Starting...</p>;
+  if (error) return <p style={{ fontSize: "0.84rem", color: "var(--error)" }}>{error}</p>;
+  if (!status) return <p style={{ fontSize: "0.84rem", color: "var(--text-faint)" }}>Starting…</p>;
 
   const pct = status.progress_pct ?? 0;
-
   return (
-    <div className="space-y-3">
-      <div className="flex justify-between text-xs" style={{ color: "var(--text-muted)" }}>
-        <span>{status.current_stage || "Processing..."}</span>
-        <span>{pct.toFixed(0)}%</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+        <span>{status.current_stage || "Processing…"}</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{pct.toFixed(0)}%</span>
       </div>
-      <div
-        className="h-1.5 rounded-full overflow-hidden"
-        style={{ background: "var(--surface-3)" }}
-      >
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{
-            width: `${Math.max(5, pct)}%`,
-            background: "var(--accent)",
-          }}
-        />
+      <div className="progress-bar-track">
+        <div className="progress-bar-fill" style={{ width: `${Math.max(5, pct)}%` }} />
       </div>
-      <p className="text-xs" style={{ color: "var(--text-faint)" }}>
+      <p style={{ fontSize: "0.75rem", color: "var(--text-faint)" }}>
         {status.embedded_chunks}/{status.total_chunks} chunks embedded
       </p>
     </div>
   );
 }
 
-// ── Main Page ────────────────────────────────────────────────────────────────
+// ── Repo Card ─────────────────────────────────────────────────────────────────
+
+function RepoCard({
+  repo,
+  deletingId,
+  onOpen,
+  onDelete,
+}: {
+  repo: Repo;
+  deletingId: string | null;
+  onOpen: () => void;
+  onDelete: (e: React.MouseEvent) => void;
+}) {
+  const isReady = repo.status === "READY";
+  return (
+    <div
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter" && isReady) onOpen(); }}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        padding: "12px 14px",
+        borderRadius: "10px",
+        border: "1px solid var(--border)",
+        background: "var(--surface-3)",
+        cursor: isReady ? "pointer" : "default",
+        transition: "all 0.18s",
+        position: "relative",
+        outline: "none",
+      }}
+      onMouseEnter={(e) => {
+        if (isReady) {
+          (e.currentTarget as HTMLElement).style.borderColor = "var(--border-accent)";
+          (e.currentTarget as HTMLElement).style.background = "var(--surface-4)";
+        }
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
+        (e.currentTarget as HTMLElement).style.background = "var(--surface-3)";
+      }}
+    >
+      <div style={{
+        width: "36px", height: "36px", flexShrink: 0,
+        borderRadius: "8px",
+        background: isReady ? "rgba(59,130,246,0.1)" : "var(--surface-4)",
+        border: isReady ? "1px solid rgba(59,130,246,0.2)" : "1px solid var(--border)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <GitBranch size={15} style={{ color: isReady ? "var(--primary)" : "var(--text-faint)" }} />
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{
+          fontSize: "0.84rem", fontWeight: 600, color: "#fff",
+          margin: 0, marginBottom: "3px",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>
+          {repo.name.split("/")[1] || repo.name}
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <RepoStatusBadge status={repo.status} chunkCount={repo.chunkCount} />
+        </div>
+        {repo.status === "ERROR" && repo.errorMsg && (
+          <p style={{ fontSize: "0.72rem", color: "var(--error)", margin: "3px 0 0", lineHeight: 1.4 }}>
+            {repo.errorMsg.slice(0, 60)}
+          </p>
+        )}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+        {isReady && <ChevronRight size={15} style={{ color: "var(--text-faint)" }} />}
+        <button
+          onClick={onDelete}
+          disabled={deletingId === repo.id}
+          style={{
+            width: "26px", height: "26px",
+            borderRadius: "6px",
+            background: "transparent",
+            border: "1px solid transparent",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer",
+            color: "var(--text-faint)",
+            transition: "all 0.15s",
+            opacity: 0,
+          }}
+          className="repo-delete-btn"
+          aria-label={`Delete ${repo.name}`}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.1)";
+            (e.currentTarget as HTMLElement).style.borderColor = "rgba(239,68,68,0.2)";
+            (e.currentTarget as HTMLElement).style.color = "var(--error)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.background = "transparent";
+            (e.currentTarget as HTMLElement).style.borderColor = "transparent";
+            (e.currentTarget as HTMLElement).style.color = "var(--text-faint)";
+          }}
+        >
+          {deletingId === repo.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function IngestPage() {
   const { getToken, isSignedIn, isLoaded } = useAuth();
@@ -141,6 +224,9 @@ export default function IngestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [ingestingRepoId, setIngestingRepoId] = useState<string | null>(null);
+  const [readyRepoId, setReadyRepoId] = useState<string | null>(null);
+  const [readyPersona, setReadyPersona] = useState<RepoPersona | null>(null);
+  const [loadingPersona, setLoadingPersona] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const api = createApiClient(getToken);
@@ -169,11 +255,12 @@ export default function IngestPage() {
     if (!url.trim()) return;
     setSubmitting(true);
     setSubmitError(null);
-
     try {
       const res = await api.repos.create(url.trim(), languages);
       setUrl("");
       setIngestingRepoId(res.repoId);
+      setReadyRepoId(null);
+      setReadyPersona(null);
       await fetchRepos();
     } catch (err: unknown) {
       setSubmitError(err instanceof Error ? err.message : "Failed to connect repo");
@@ -182,7 +269,8 @@ export default function IngestPage() {
     }
   };
 
-  const handleDelete = async (repoId: string) => {
+  const handleDelete = async (e: React.MouseEvent, repoId: string) => {
+    e.stopPropagation();
     if (!confirm("Delete this repo and all its chat sessions?")) return;
     setDeletingId(repoId);
     try {
@@ -196,198 +284,228 @@ export default function IngestPage() {
   if (!isLoaded) return null;
 
   return (
-    <div className="min-h-screen px-4 md:px-6 py-6 md:py-8">
-      <div className="mx-auto max-w-[1280px]">
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-2xl md:text-3xl font-semibold mb-2">Repository Workspace</h1>
-          <p className="text-sm md:text-base">
+    <div className="page-shell page-shell--wide">
+      {/* ── Page Header ──────────────────────────────────────────── */}
+      <div className="page-header">
+        <div className="page-header__left">
+          <div className="page-header__title">
+            <div style={{
+              width: "36px", height: "36px", borderRadius: "9px", flexShrink: 0,
+              background: "linear-gradient(135deg, var(--primary), var(--secondary))",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "var(--glow-primary)",
+            }}>
+              <LayoutDashboard size={17} color="#fff" />
+            </div>
+            Repository Workspace
+          </div>
+          <p className="page-header__subtitle">
             Connect repositories, track indexing, and launch into production-grade chat sessions.
           </p>
         </div>
+        <button onClick={fetchRepos} className="btn btn-secondary btn-sm">
+          <RefreshCw size={13} />
+          Refresh
+        </button>
+      </div>
 
-        <div className="flex gap-6">
-      {/* ── Left column: repo list ─────────────────── */}
-      <aside
-        className="hidden lg:flex flex-col"
-        style={{
-          width: "320px",
+      {/* ── Two-column layout ─────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+        {/* ── LEFT SIDEBAR: Repo List ─────────────────────────────── */}
+        <aside style={{
+          width: "300px",
           flexShrink: 0,
+          borderRadius: "14px",
           border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg)",
-          background: "var(--surface)",
-          boxShadow: "var(--shadow-sm)",
-          maxHeight: "calc(100vh - var(--navbar-h) - 110px)",
-        }}
-      >
-        <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-faint)" }}>
-              Connected Repositories
-            </span>
-            <button
-              onClick={fetchRepos}
-              className="btn btn-ghost btn-sm"
-              title="Refresh"
-              aria-label="Refresh repos"
-            >
-              <RefreshCw size={13} />
-            </button>
+          background: "var(--surface-2)",
+          overflow: "hidden",
+          position: "sticky",
+          top: "calc(var(--navbar-h) + 16px)",
+          maxHeight: "calc(100vh - var(--navbar-h) - 80px)",
+          display: "flex",
+          flexDirection: "column",
+        }}>
+          {/* Sidebar header */}
+          <div style={{
+            padding: "14px 16px",
+            borderBottom: "1px solid var(--border)",
+            background: "rgba(255,255,255,0.02)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{
+                fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase",
+                letterSpacing: "0.07em", color: "var(--text-faint)",
+              }}>
+                Connected Repos
+              </span>
+              <span style={{
+                fontSize: "0.72rem", fontWeight: 700,
+                padding: "2px 8px", borderRadius: "999px",
+                background: "rgba(59,130,246,0.1)",
+                border: "1px solid rgba(59,130,246,0.15)",
+                color: "var(--primary)",
+              }}>
+                {repos.length}
+              </span>
+            </div>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-faint)", margin: "4px 0 0" }}>
+              Click a ready repo to open chat
+            </p>
           </div>
-          <p className="text-xs" style={{ color: "var(--text-faint)" }}>
-            Ready repos open directly in chat workspace.
-          </p>
-        </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {loadingRepos ? (
-            <div className="space-y-2">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="skeleton h-16 rounded-lg" />
-              ))}
-            </div>
-          ) : repos.length === 0 ? (
-            <div className="py-10 text-center">
-              <GitBranch size={24} className="mx-auto mb-3" style={{ color: "var(--text-faint)" }} />
-              <p className="text-sm" style={{ color: "var(--text-faint)" }}>
-                No repos connected yet
-              </p>
-            </div>
-          ) : (
-            repos.map((repo) => (
-              <div
-                key={repo.id}
-                className="group p-3 rounded-xl border cursor-pointer transition-all"
-                style={{
-                  background: "#fff",
-                  borderColor: "var(--border)",
-                }}
-                onClick={() => {
-                  if (repo.status === "READY") router.push(`/chat/${repo.id}`);
-                }}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && repo.status === "READY") router.push(`/chat/${repo.id}`);
-                }}
-              >
-                <div className="flex items-start gap-2">
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: "var(--surface-2)" }}
-                  >
-                    <GitBranch size={14} style={{ color: "var(--text-muted)" }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: "var(--text)" }}>
-                      {repo.name.split("/")[1] || repo.name}
-                    </p>
-                    <div className="mt-1.5">
-                      <RepoStatusBadge status={repo.status} chunkCount={repo.chunkCount} />
-                    </div>
-                    {repo.status === "ERROR" && repo.errorMsg ? (
-                      <p className="mt-1 text-xs line-clamp-2" style={{ color: "var(--error)" }}>
-                        {repo.errorMsg}
-                      </p>
-                    ) : null}
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDelete(repo.id); }}
-                    className="btn btn-ghost btn-sm opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                    disabled={deletingId === repo.id}
-                    aria-label={`Delete ${repo.name}`}
-                  >
-                    {deletingId === repo.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                  </button>
-                </div>
+          {/* Repo list */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "10px" }}>
+            {loadingRepos ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="skeleton" style={{ height: "64px", borderRadius: "10px" }} />
+                ))}
               </div>
-            ))
-          )}
-        </div>
-      </aside>
-
-      {/* ── Main: add repo form ────────────────────── */}
-      <main className="flex-1 min-w-0">
-        <div className="card p-5 md:p-7" style={{ background: "var(--surface)" }}>
-          <h2 className="text-xl font-semibold mb-2">Connect New Repository</h2>
-          <p className="text-sm mb-7">
-            Paste a public GitHub URL and select languages to optimize indexing quality.
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label htmlFor="repo-url" className="label">
-                GitHub Repository URL
-              </label>
-              <input
-                id="repo-url"
-                type="url"
-                className="input"
-                placeholder="https://github.com/owner/repo"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                required
-                disabled={submitting}
-              />
-            </div>
-
-            <div>
-              <label className="label">Language Filter</label>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {LANGUAGE_OPTIONS.map((opt) => {
-                  const active = languages.includes(opt.value);
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => toggleLanguage(opt.value)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border"
-                      style={{
-                        background: active ? "var(--accent-muted)" : "#fff",
-                        color: active ? "var(--accent)" : "var(--text-muted)",
-                        borderColor: active ? "#bcd1ff" : "var(--border)",
-                      }}
-                      aria-pressed={active}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
+            ) : repos.length === 0 ? (
+              <div style={{ padding: "32px 16px", textAlign: "center" }}>
+                <GitBranch size={24} style={{ color: "var(--text-faint)", margin: "0 auto 8px" }} />
+                <p style={{ fontSize: "0.82rem", color: "var(--text-faint)", margin: 0 }}>
+                  No repos connected yet
+                </p>
               </div>
-            </div>
-
-            {submitError && (
-              <div
-                className="flex items-center gap-2 px-4 py-3 rounded-lg text-sm"
-                style={{ background: "var(--error-muted)", color: "var(--error)", border: "1px solid rgba(239,68,68,0.2)" }}
-              >
-                <AlertTriangle size={15} />
-                {submitError}
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {repos.map((repo) => (
+                  <RepoCard
+                    key={repo.id}
+                    repo={repo}
+                    deletingId={deletingId}
+                    onOpen={() => { if (repo.status === "READY") router.push(`/chat/${repo.id}`); }}
+                    onDelete={(e) => handleDelete(e, repo.id)}
+                  />
+                ))}
               </div>
             )}
+          </div>
+        </aside>
 
-            <button
-              type="submit"
-              className="btn btn-primary w-full md:w-auto"
-              disabled={submitting || !url.trim()}
-            >
-              {submitting ? (
-                <><Loader2 size={16} className="animate-spin" /> Starting Ingestion...</>
-              ) : (
-                <><Plus size={16} /> Connect Repository</>
-              )}
-            </button>
-          </form>
+        {/* ── RIGHT MAIN: Connect + Progress ─────────────────────── */}
+        <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* Connect Card */}
+          <div className="glass-card" style={{ padding: "28px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+              <Link2 size={18} style={{ color: "var(--primary)" }} />
+              <h2 style={{ color: "#fff", margin: 0 }}>Connect New Repository</h2>
+            </div>
+            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: "0 0 24px" }}>
+              Paste a public GitHub URL and select languages to optimize indexing quality.
+            </p>
 
-          {/* Active ingestion progress */}
-          {ingestingRepoId && (
-            <div
-              className="mt-7 p-5 rounded-xl"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-                  Ingestion in Progress
+            <form onSubmit={handleSubmit} suppressHydrationWarning style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+              {/* URL input */}
+              <div>
+                <label htmlFor="repo-url" className="label">GitHub Repository URL</label>
+                <div style={{ position: "relative" }}>
+                  <GitBranch
+                    size={15}
+                    style={{
+                      position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)",
+                      color: "var(--text-faint)", pointerEvents: "none",
+                    }}
+                  />
+                  <input
+                    id="repo-url"
+                    type="url"
+                    className="input"
+                    placeholder="https://github.com/owner/repo"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    required
+                    disabled={submitting}
+                    style={{ paddingLeft: "40px" }}
+                  />
+                </div>
+              </div>
+
+              {/* Language filter */}
+              <div>
+                <label className="label">
+                  <Code2 size={13} style={{ display: "inline", marginRight: "5px", verticalAlign: "middle" }} />
+                  Language Filter
+                </label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "8px" }}>
+                  {LANGUAGE_OPTIONS.map((opt) => {
+                    const active = languages.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => toggleLanguage(opt.value)}
+                        aria-pressed={active}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: "8px",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                          background: active ? "rgba(59,130,246,0.15)" : "var(--surface-3)",
+                          color: active ? "var(--primary)" : "var(--text-muted)",
+                          border: active ? "1px solid rgba(59,130,246,0.35)" : "1px solid var(--border)",
+                          boxShadow: active ? "0 0 8px rgba(59,130,246,0.12)" : "none",
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p style={{ fontSize: "0.73rem", color: "var(--text-faint)", margin: "8px 0 0" }}>
+                  {languages.length === 0 ? "⚠ Select at least one language" : `${languages.length} language${languages.length !== 1 ? "s" : ""} selected`}
                 </p>
+              </div>
+
+              {/* Error */}
+              {submitError && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: "10px",
+                  padding: "12px 16px", borderRadius: "10px",
+                  background: "var(--error-muted)", border: "1px solid rgba(239,68,68,0.2)",
+                  color: "var(--error)", fontSize: "0.875rem",
+                }}>
+                  <AlertTriangle size={15} />
+                  {submitError}
+                </div>
+              )}
+
+              {/* Submit */}
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <button
+                  type="submit"
+                  suppressHydrationWarning
+                  className="btn btn-primary"
+                  disabled={submitting || !url.trim() || languages.length === 0}
+                >
+                  {submitting ? (
+                    <><Loader2 size={15} className="animate-spin" /> Starting Ingestion…</>
+                  ) : (
+                    <><Plus size={15} /> Connect Repository</>
+                  )}
+                </button>
+                {submitting && (
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-faint)" }}>
+                    This may take up to 60 seconds…
+                  </span>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* Active Ingestion Progress */}
+          {ingestingRepoId && !readyRepoId && (
+            <div className="glass-card" style={{ padding: "22px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Loader2 size={16} className="animate-spin" style={{ color: "var(--primary)" }} />
+                  <span style={{ fontSize: "0.9rem", fontWeight: 600, color: "#fff" }}>
+                    Ingestion in Progress
+                  </span>
+                </div>
                 <span className="badge badge-blue">
                   <Loader2 size={10} className="animate-spin" /> Running
                 </span>
@@ -397,56 +515,92 @@ export default function IngestPage() {
                 getToken={getToken}
                 onDone={async (status) => {
                   await fetchRepos();
-
                   if (status.status === "done") {
-                    try {
-                      const repo = await api.repos.get(ingestingRepoId);
-                      if (repo.status === "READY") {
-                        router.push(`/chat/${ingestingRepoId}`);
-                        return;
-                      }
-                    } catch {
-                      // Fall through and clear the progress card.
-                    }
+                    setReadyRepoId(ingestingRepoId);
+                    setLoadingPersona(true);
+                    let attempts = 0;
+                    const pollPersona = async () => {
+                      try {
+                        const persona = await api.repos.getPersona(ingestingRepoId);
+                        if (persona && persona.repo_name) {
+                          setReadyPersona(persona);
+                          setLoadingPersona(false);
+                          return;
+                        }
+                      } catch { /* retry */ }
+                      attempts++;
+                      if (attempts < 15) setTimeout(pollPersona, 2000);
+                      else setLoadingPersona(false);
+                    };
+                    setTimeout(pollPersona, 1000);
+                  } else {
+                    setIngestingRepoId(null);
                   }
-
-                  setIngestingRepoId(null);
                 }}
               />
             </div>
           )}
-        </div>
 
-        {/* Mobile repo list */}
-        {repos.length > 0 && (
-          <div className="mt-6 lg:hidden">
-            <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-              Connected Repositories
-            </h2>
-            <div className="space-y-2">
-              {repos.map((repo) => (
-                <div
-                  key={repo.id}
-                  className="card flex items-center gap-3 p-4 cursor-pointer"
-                  style={{ background: "var(--surface)" }}
-                  onClick={() => { if (repo.status === "READY") router.push(`/chat/${repo.id}`); }}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <GitBranch size={16} style={{ color: "var(--text-muted)" }} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: "var(--text)" }}>{repo.name}</p>
-                    <RepoStatusBadge status={repo.status} chunkCount={repo.chunkCount} />
+          {/* Repo Ready */}
+          {readyRepoId && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {loadingPersona ? (
+                <RepoIdentityCardSkeleton />
+              ) : readyPersona ? (
+                <>
+                  <RepoIdentityCard
+                    persona={readyPersona}
+                    onRegenerate={async () => {
+                      setLoadingPersona(true);
+                      try {
+                        const fresh = await api.repos.refreshPersona(readyRepoId);
+                        setReadyPersona(fresh);
+                      } finally {
+                        setLoadingPersona(false);
+                      }
+                    }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button onClick={() => router.push(`/chat/${readyRepoId}`)} className="btn btn-primary">
+                      Start Chatting <ChevronRight size={15} />
+                    </button>
                   </div>
-                  {repo.status === "READY" && <ChevronRight size={16} style={{ color: "var(--text-faint)" }} />}
+                </>
+              ) : (
+                <div className="glass-card" style={{ padding: "24px", textAlign: "center" }}>
+                  <CheckCircle size={28} style={{ color: "var(--success)", margin: "0 auto 12px" }} />
+                  <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: "0 0 16px" }}>
+                    Repository is ready! Persona generation timed out.
+                  </p>
+                  <button onClick={() => router.push(`/chat/${readyRepoId}`)} className="btn btn-primary">
+                    Start Chatting <ChevronRight size={15} />
+                  </button>
                 </div>
-              ))}
+              )}
             </div>
-          </div>
-        )}
-      </main>
+          )}
+
+          {/* Empty state hint */}
+          {!ingestingRepoId && !readyRepoId && repos.length === 0 && !loadingRepos && (
+            <div style={{
+              padding: "40px 24px", textAlign: "center",
+              borderRadius: "14px", border: "1px dashed var(--border)",
+            }}>
+              <GitBranch size={32} style={{ color: "var(--text-faint)", margin: "0 auto 12px" }} />
+              <h3 style={{ color: "var(--text-muted)", marginBottom: "6px" }}>No repositories yet</h3>
+              <p style={{ fontSize: "0.875rem", color: "var(--text-faint)", maxWidth: "380px", margin: "0 auto" }}>
+                Paste a GitHub URL above to index your first codebase. Indexing typically takes under 60 seconds.
+              </p>
+            </div>
+          )}
+        </main>
       </div>
-      </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        .repo-delete-btn { opacity: 0; }
+        div:hover > .repo-delete-btn,
+        .repo-delete-btn:focus { opacity: 1; }
+      `}} />
     </div>
   );
 }

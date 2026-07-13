@@ -39,6 +39,8 @@ model Repo {
   status      String   @default("PENDING")  // PENDING | INGESTING | READY | ERROR
   chunkCount  Int        @default(0)
   errorMsg    String?
+  personaJson String?                         // JSON: cached RepoPersona
+  personaGeneratedAt DateTime?                // when persona was last generated
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions    Session[]

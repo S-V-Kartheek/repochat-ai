@@ -12,6 +12,8 @@ import {
   triggerIngestion,
   getIngestStatus,
   deleteRepoVectors,
+  generatePersona,
+  refreshPersona,
 } from "../services/aiProxy";
 
 export const repoRoutes = Router();
@@ -152,7 +154,7 @@ repoRoutes.get("/:repoId/status", requireAuth, async (req, res) => {
 
   const repo = await prisma.repo.findFirst({
     where: { id: req.params.repoId, userId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, githubUrl: true, name: true },
   });
 
   if (!repo) {
@@ -173,6 +175,22 @@ repoRoutes.get("/:repoId/status", requireAuth, async (req, res) => {
           errorMsg: null,
         },
       });
+
+      // Background persona generation
+      if (repo.status !== "READY") {
+        generatePersona({
+          repo_id: repo.id,
+          repo_url: repo.githubUrl,
+          repo_name: repo.name,
+        })
+          .then((persona) =>
+            prisma.repo.update({
+              where: { id: repo.id },
+              data: { personaJson: JSON.stringify(persona), personaGeneratedAt: new Date() },
+            })
+          )
+          .catch((err) => console.error("Background persona failed:", err));
+      }
     } else if (aiStatus.status === "error") {
       await prisma.repo.update({
         where: { id: repo.id },
@@ -230,3 +248,79 @@ repoRoutes.delete("/:repoId", requireAuth, async (req, res) => {
 
   res.json({ deleted: true, repoId: repo.id });
 });
+
+/**
+ * GET /api/repos/:repoId/persona
+ * Get repo persona (cached from DB, or fetch from AI service if missing)
+ */
+repoRoutes.get("/:repoId/persona", requireAuth, async (req, res) => {
+  const userId = await ensureUser(req.userId!, req.userEmail);
+  const repo = await prisma.repo.findFirst({
+    where: { id: req.params.repoId, userId },
+  });
+
+  if (!repo) {
+    res.status(404).json({ error: "Repo not found" });
+    return;
+  }
+
+  // Return cached from DB
+  if (repo.personaJson) {
+    try {
+      res.json(JSON.parse(repo.personaJson));
+      return;
+    } catch { /* parse error, re-fetch */ }
+  }
+
+  // Fetch/generate from AI service
+  try {
+    const persona = await generatePersona({
+      repo_id: repo.id,
+      repo_url: repo.githubUrl,
+      repo_name: repo.name,
+    });
+
+    await prisma.repo.update({
+      where: { id: repo.id },
+      data: { personaJson: JSON.stringify(persona), personaGeneratedAt: new Date() },
+    });
+
+    res.json(persona);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch persona" });
+  }
+});
+
+/**
+ * POST /api/repos/:repoId/persona/refresh
+ * Force regenerate persona
+ */
+repoRoutes.post("/:repoId/persona/refresh", requireAuth, async (req, res) => {
+  const userId = await ensureUser(req.userId!, req.userEmail);
+  const repo = await prisma.repo.findFirst({
+    where: { id: req.params.repoId, userId },
+  });
+
+  if (!repo) {
+    res.status(404).json({ error: "Repo not found" });
+    return;
+  }
+
+  try {
+    const persona = await refreshPersona(repo.id, {
+      repo_id: repo.id,
+      repo_url: repo.githubUrl,
+      repo_name: repo.name,
+    });
+
+    await prisma.repo.update({
+      where: { id: repo.id },
+      data: { personaJson: JSON.stringify(persona), personaGeneratedAt: new Date() },
+    });
+
+    res.json(persona);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to refresh persona" });
+  }
+});
+

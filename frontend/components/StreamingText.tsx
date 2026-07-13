@@ -126,6 +126,10 @@ export default function StreamingText({
         break;
       }
 
+      if (res?.status === 429) {
+        throw new Error("You have exceeded the rate limit. Please try again later.");
+      }
+
       if (!res || !res.ok || !res.body) {
         throw new Error(`Stream error: HTTP ${res?.status || "Unknown"}`);
       }

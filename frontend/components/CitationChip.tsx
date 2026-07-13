@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useContext } from "react";
 import type { Citation } from "@/lib/types";
 import { X, FileCode } from "lucide-react";
+import { RepoWorkspaceContext } from "./repo/RepoWorkspaceContext";
 
 // ── Snippet Modal ─────────────────────────────────────────────────────────────
 
@@ -22,40 +23,51 @@ export function SnippetModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(15,23,42,0.45)", backdropFilter: "blur(4px)" }}
+      style={{ background: "rgba(2, 8, 20, 0.75)", backdropFilter: "blur(16px)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
       aria-label={`Code snippet from ${citation.file}`}
     >
       <div
-        className="w-full max-w-2xl rounded-xl overflow-hidden shadow-2xl fade-in"
+        className="w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl fade-in"
         style={{
-          background: "var(--code-bg)",
-          border: "1px solid #2f3a52",
+          background: "#020814",
+          border: "1px solid rgba(6, 182, 212, 0.2)",
           maxHeight: "80vh",
           display: "flex",
           flexDirection: "column",
+          boxShadow: "0 0 40px rgba(6, 182, 212, 0.1), 0 32px 80px rgba(0,0,0,0.7)",
         }}
       >
         {/* Header */}
         <div
           className="flex items-center justify-between px-4 py-3 flex-shrink-0"
-          style={{ borderBottom: "1px solid var(--code-border)" }}
+          style={{
+            borderBottom: "1px solid rgba(255,255,255,0.05)",
+            background: "rgba(255,255,255,0.02)",
+          }}
         >
           <div className="flex items-center gap-2.5">
-            <FileCode size={14} style={{ color: "var(--accent)" }} />
+            <FileCode size={14} style={{ color: "var(--tertiary)" }} />
             <span
-              className="font-mono text-xs font-medium"
-              style={{ color: "var(--text)" }}
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "0.78rem",
+                fontWeight: 500,
+                color: "var(--text)",
+              }}
             >
               {citation.file}
             </span>
             <span
-              className="text-xs px-2 py-0.5 rounded"
               style={{
-                background: "var(--surface-3)",
-                color: "var(--text-muted)",
+                fontSize: "0.72rem",
+                padding: "1px 8px",
+                borderRadius: "999px",
+                background: "rgba(6,182,212,0.1)",
+                border: "1px solid rgba(6,182,212,0.2)",
+                color: "var(--tertiary)",
                 fontFamily: "var(--font-mono)",
               }}
             >
@@ -73,7 +85,7 @@ export function SnippetModal({
 
         {/* Code */}
         <div className="overflow-auto flex-1 p-5">
-          <pre className="font-mono text-sm leading-relaxed" style={{ color: "#c4cfe8", margin: 0 }}>
+          <pre style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem", lineHeight: 1.6, color: "#c4cfe8", margin: 0 }}>
             <code>{citation.snippet}</code>
           </pre>
         </div>
@@ -90,38 +102,49 @@ interface CitationChipProps {
 }
 
 export default function CitationChip({ citation, index }: CitationChipProps) {
-  const [open, setOpen] = useState(false);
+  // Use workspace context if available (e.g. inside /chat), otherwise fall back
+  // to a local modal so CitationChip works on standalone pages like /bookmarks.
+  const workspaceCtx = useContext(RepoWorkspaceContext);
+  const [localModal, setLocalModal] = useState<Citation | null>(null);
+
   const fileName = citation.file.split("/").pop() ?? citation.file;
+
+  const handleClick = () => {
+    if (workspaceCtx) {
+      workspaceCtx.openCitation(citation);
+    } else {
+      setLocalModal(citation);
+    }
+  };
 
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all"
-        style={{
-          background: "#ecf3ff",
-          color: "#1d4ed8",
-          border: "1px solid #cadcff",
-          cursor: "pointer",
-        }}
+        onClick={handleClick}
+        className="citation-chip"
         title={`${citation.file}:${citation.startLine}-${citation.endLine}`}
         aria-label={`View code snippet from ${citation.file} lines ${citation.startLine} to ${citation.endLine}`}
       >
         <span
-          className="font-sans text-[10px] px-1 py-px rounded"
           style={{
-            background: "#dbe8ff",
-            color: "#1d4ed8",
+            fontFamily: "var(--font-sans)",
+            fontSize: "0.65rem",
+            fontWeight: 700,
+            padding: "1px 5px",
+            borderRadius: "4px",
+            background: "rgba(6,182,212,0.15)",
+            color: "var(--tertiary)",
           }}
         >
           {index + 1}
         </span>
         {fileName}
-        <span style={{ color: "var(--text-faint)" }}>:{citation.startLine}</span>
+        <span style={{ color: "rgba(6,182,212,0.6)" }}>:{citation.startLine}</span>
       </button>
 
-      {open && (
-        <SnippetModal citation={citation} onClose={() => setOpen(false)} />
+      {/* Fallback local modal — only used outside RepoWorkspaceProvider */}
+      {localModal && (
+        <SnippetModal citation={localModal} onClose={() => setLocalModal(null)} />
       )}
     </>
   );

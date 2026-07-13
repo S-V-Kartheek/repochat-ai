@@ -85,9 +85,9 @@ const createComponents = (): Components => ({
           borderRadius: "5px",
           fontSize: "0.87em",
           fontFamily: "var(--font-mono)",
-          background: "rgba(37,99,235,0.08)",
-          color: "#1d4ed8",
-          border: "1px solid rgba(37,99,235,0.12)",
+          background: "rgba(59,130,246,0.1)",
+          color: "var(--primary-dim)",
+          border: "1px solid rgba(59,130,246,0.15)",
         }}
         {...props}
       >
@@ -134,8 +134,8 @@ const createComponents = (): Components => ({
         style={{
           margin: "0.65em 0",
           padding: "0.5em 1em",
-          borderLeft: "3px solid var(--accent)",
-          background: "rgba(37,99,235,0.05)",
+          borderLeft: "3px solid var(--primary)",
+          background: "rgba(59,130,246,0.05)",
           borderRadius: "0 6px 6px 0",
           color: "var(--text-muted)",
           fontStyle: "italic",
@@ -198,7 +198,7 @@ const createComponents = (): Components => ({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: "2px" }}
+        style={{ color: "var(--primary)", textDecoration: "underline", textUnderlineOffset: "2px" }}
       >
         {children}
       </a>

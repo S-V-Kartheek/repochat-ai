@@ -12,6 +12,7 @@ import type {
   CreateRepoResponse,
   CreateSessionResponse,
   IngestStatus,
+  RepoPersona,
 } from "./types";
 
 const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:4000";
@@ -69,6 +70,14 @@ export function createApiClient(getToken: () => Promise<string | null>) {
       delete: (repoId: string) =>
         apiFetch<{ deleted: boolean }>(`/api/repos/${repoId}`, getToken, {
           method: "DELETE",
+        }),
+
+      getPersona: (repoId: string) =>
+        apiFetch<RepoPersona>(`/api/repos/${repoId}/persona`, getToken),
+
+      refreshPersona: (repoId: string) =>
+        apiFetch<RepoPersona>(`/api/repos/${repoId}/persona/refresh`, getToken, {
+          method: "POST",
         }),
     },
 

@@ -165,3 +165,72 @@ export async function pipeStreamToResponse(
 
   res.end();
 }
+
+// ── Persona helpers ───────────────────────────────────────────────────────────
+
+export interface AiPersonaRequest {
+  repo_id: string;
+  repo_url: string;
+  repo_name: string;
+}
+
+export interface AiSuggestedQuestion {
+  id: string;
+  question: string;
+  category: string;
+  label?: string;
+}
+
+export interface AiPersonaResponse {
+  repo_name: string;
+  repo_type: string;
+  dominant_language: string;
+  architecture_style: string;
+  expertise_level: string;
+  frameworks: string[];
+  stack: string[];
+  architecture_overview: string;
+  key_entry_points: string[];
+  total_files: number;
+  total_chunks: number;
+  suggested_questions: AiSuggestedQuestion[];
+  onboarding_guide: string;
+  file_tree: string;
+}
+
+/**
+ * generatePersona — POST to AI service, generate + cache persona.
+ */
+export async function generatePersona(
+  payload: AiPersonaRequest
+): Promise<AiPersonaResponse> {
+  const res = await aiClient.post<AiPersonaResponse>("/api/v1/persona/", payload, {
+    timeout: 120_000,
+  });
+  return res.data;
+}
+
+/**
+ * getPersonaFromAI — GET cached persona from AI service in-memory cache.
+ */
+export async function getPersonaFromAI(
+  repoId: string
+): Promise<AiPersonaResponse> {
+  const res = await aiClient.get<AiPersonaResponse>(`/api/v1/persona/${repoId}`);
+  return res.data;
+}
+
+/**
+ * refreshPersona — force-regenerate persona.
+ */
+export async function refreshPersona(
+  repoId: string,
+  payload: AiPersonaRequest
+): Promise<AiPersonaResponse> {
+  const res = await aiClient.post<AiPersonaResponse>(
+    `/api/v1/persona/${repoId}/refresh`,
+    payload,
+    { timeout: 120_000 }
+  );
+  return res.data;
+}

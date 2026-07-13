@@ -25,7 +25,7 @@ import CitationChip from "./CitationChip";
 import MarkdownMessage from "./MarkdownMessage";
 import type { Message, Citation, Session } from "@/lib/types";
 
-// ── Starter suggested questions (static — Phase 3 will personalize per repo) ──
+// ── Starter suggested questions ────────────────────────────────────────────────
 const STARTER_QUESTIONS = [
   "What is the overall architecture of this project?",
   "What are the main entry points and how does the app start?",
@@ -34,12 +34,20 @@ const STARTER_QUESTIONS = [
 ];
 
 // ── Avatar components ─────────────────────────────────────────────────────────
-
 function BotAvatar() {
   return (
     <div
-      className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center"
-      style={{ background: "linear-gradient(135deg,#2f6ff1,#7c3aed)", boxShadow: "0 2px 8px rgba(37,99,235,0.25)" }}
+      style={{
+        flexShrink: 0,
+        width: "32px",
+        height: "32px",
+        borderRadius: "8px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(135deg,#2f6ff1,#7c3aed)",
+        boxShadow: "0 2px 10px rgba(37,99,235,0.3)",
+      }}
       aria-hidden="true"
     >
       <Bot size={15} color="#fff" strokeWidth={2} />
@@ -50,8 +58,22 @@ function BotAvatar() {
 function UserAvatar() {
   return (
     <div
-      className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold"
-      style={{ background: "linear-gradient(135deg,#2f6ff1,#2457ca)", color: "#fff" }}
+      style={{
+        flexShrink: 0,
+        width: "32px",
+        height: "32px",
+        borderRadius: "8px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "0.72rem",
+        fontWeight: 700,
+        background: "linear-gradient(135deg, #2c2f3e, #343748)",
+        color: "#c8cedf",
+        border: "1px solid rgba(255,255,255,0.1)",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
+        letterSpacing: "0.03em",
+      }}
       aria-hidden="true"
     >
       Y
@@ -60,7 +82,6 @@ function UserAvatar() {
 }
 
 // ── Copy button ───────────────────────────────────────────────────────────────
-
 function CopyMessageButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -85,7 +106,6 @@ function CopyMessageButton({ text }: { text: string }) {
 }
 
 // ── RagasBadge ────────────────────────────────────────────────────────────────
-
 function RagasBadge({ score }: { score: Message["ragasScore"] }) {
   if (!score) {
     return (
@@ -115,7 +135,6 @@ function RagasBadge({ score }: { score: Message["ragasScore"] }) {
 }
 
 // ── Single message bubble ─────────────────────────────────────────────────────
-
 function MessageBubble({
   message,
   onToggleBookmark,
@@ -127,20 +146,64 @@ function MessageBubble({
 
   return (
     <div
-      className={`chat-msg ${isUser ? "chat-msg--user" : "chat-msg--assistant"} slide-up`}
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "12px",
+        flexDirection: isUser ? "row-reverse" : "row",
+        padding: "4px 0",
+      }}
+      className="slide-up"
     >
       {/* Avatar */}
-      {!isUser && <BotAvatar />}
+      {isUser ? <UserAvatar /> : <BotAvatar />}
 
       {/* Bubble + actions */}
-      <div className={`chat-msg-body ${isUser ? "items-end" : "items-start"}`}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "6px",
+          maxWidth: "80%",
+          alignItems: isUser ? "flex-end" : "flex-start",
+        }}
+      >
         {/* Role label */}
-        <div className="chat-msg-label">
+        <div style={{
+          fontSize: "0.7rem",
+          fontWeight: 600,
+          color: "var(--text-faint)",
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          padding: "0 4px",
+          textAlign: isUser ? "right" : "left",
+        }}>
           {isUser ? "You" : "RepoTalk"}
         </div>
 
         {/* Content bubble */}
-        <div className={`chat-bubble ${isUser ? "chat-bubble--user" : "chat-bubble--assistant"}`}>
+        <div
+          style={{
+            padding: "12px 16px",
+            borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+            fontSize: "0.9rem",
+            lineHeight: 1.7,
+            ...(isUser
+              ? {
+                // Warm neutral charcoal — no blue tint, clearly distinct from background
+                background: "linear-gradient(160deg, #2c2f3e 0%, #252836 100%)",
+                color: "#dde2f0",
+                border: "1px solid rgba(255, 255, 255, 0.09)",
+                boxShadow: "0 2px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)",
+              }
+              : {
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                color: "var(--text)",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+              }),
+          }}
+        >
           {isUser ? (
             <p style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
               {message.content}
@@ -152,7 +215,7 @@ function MessageBubble({
 
         {/* Citations */}
         {!isUser && message.citations && message.citations.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pt-1">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", paddingTop: "2px" }}>
             {message.citations.map((c, i) => (
               <CitationChip key={i} citation={c} index={i} />
             ))}
@@ -161,9 +224,9 @@ function MessageBubble({
 
         {/* Action row for assistant messages */}
         {!isUser && (
-          <div className="chat-msg-actions">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "2px" }}>
             <RagasBadge score={message.ragasScore} />
-            <div className="flex items-center gap-1">
+            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
               <CopyMessageButton text={message.content} />
               <button
                 onClick={() => onToggleBookmark(message.id)}
@@ -172,7 +235,7 @@ function MessageBubble({
                 title={message.bookmarked ? "Remove bookmark" : "Bookmark"}
               >
                 {message.bookmarked ? (
-                  <BookmarkCheck size={12} style={{ color: "var(--accent)" }} />
+                  <BookmarkCheck size={12} style={{ color: "var(--primary)" }} />
                 ) : (
                   <Bookmark size={12} />
                 )}
@@ -181,14 +244,11 @@ function MessageBubble({
           </div>
         )}
       </div>
-
-      {isUser && <UserAvatar />}
     </div>
   );
 }
 
 // ── Streaming bubble ──────────────────────────────────────────────────────────
-
 function StreamingBubble({
   repoId,
   sessionId,
@@ -215,13 +275,40 @@ function StreamingBubble({
   };
 
   return (
-    <div className="chat-msg chat-msg--assistant slide-up">
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "12px",
+        flexDirection: "row",
+        padding: "4px 0",
+      }}
+      className="slide-up"
+    >
       <BotAvatar />
-      <div className="chat-msg-body items-start">
-        <div className="chat-msg-label">RepoTalk</div>
-        <div className="chat-bubble chat-bubble--assistant">
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxWidth: "80%", alignItems: "flex-start" }}>
+        <div style={{
+          fontSize: "0.7rem",
+          fontWeight: 600,
+          color: "var(--text-faint)",
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          padding: "0 4px",
+        }}>
+          RepoTalk
+        </div>
+        <div style={{
+          padding: "12px 16px",
+          borderRadius: "18px 18px 18px 4px",
+          fontSize: "0.9rem",
+          lineHeight: 1.7,
+          background: "var(--surface-2)",
+          border: "1px solid var(--border)",
+          color: "var(--text)",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+        }}>
           {streamError ? (
-            <div className="flex items-center gap-2" style={{ color: "var(--error)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--error)" }}>
               <AlertTriangle size={14} />
               {streamError}
             </div>
@@ -272,7 +359,6 @@ export default function ChatPanel({
   const [streaming, setStreaming] = useState(false);
   const [streamingQuestion, setStreamingQuestion] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -290,7 +376,7 @@ export default function ChatPanel({
   useEffect(() => {
     if (!inputRef.current) return;
     inputRef.current.style.height = "auto";
-    inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 144) + "px";
+    inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 160) + "px";
   }, [input]);
 
   // ── Smart auto-scroll ──────────────────────────────────────────────────────
@@ -321,6 +407,10 @@ export default function ChatPanel({
     setError(null);
     setMessages(session.messages ?? []);
     isUserScrolledRef.current = false;
+    // Scroll to bottom on session switch
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
+    }, 50);
   }, [session.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Unmount cleanup ────────────────────────────────────────────────────────
@@ -464,12 +554,28 @@ export default function ChatPanel({
   const isEmpty = messages.length === 0 && !streaming;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "var(--surface)" }}>
+    // Critical: flex col, fill available space, min-h-0 so inner overflow works
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        height: "100%",
+        background: "var(--surface)",
+        overflow: "hidden",
+      }}
+    >
       {/* Low-chunk warning */}
       {lowChunkWarning && (
         <div
-          className="flex items-center gap-2 px-4 py-2.5 text-sm flex-shrink-0"
           style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "10px 20px",
+            fontSize: "0.84rem",
+            flexShrink: 0,
             background: "var(--warning-muted)",
             borderBottom: "1px solid rgba(245,158,11,0.2)",
             color: "var(--warning)",
@@ -480,34 +586,86 @@ export default function ChatPanel({
         </div>
       )}
 
-      {/* Messages area */}
+      {/* ── Scrollable messages area ─────────────────────────── */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-1"
-        style={{ scrollbarGutter: "stable" }}
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          overflowX: "hidden",
+          minHeight: 0,
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(255,255,255,0.1) transparent",
+        }}
       >
         {isEmpty ? (
           /* ── Empty state with starter questions ── */
-          <div className="flex flex-col items-center justify-center h-full text-center max-w-lg mx-auto gap-4">
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: "100%",
+              padding: "48px 24px",
+              textAlign: "center",
+            }}
+          >
             <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center mb-2"
-              style={{ background: "linear-gradient(135deg,#2f6ff1,#7c3aed)", boxShadow: "0 4px 20px rgba(37,99,235,0.25)" }}
+              style={{
+                width: "60px", height: "60px", borderRadius: "18px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                marginBottom: "20px",
+                background: "linear-gradient(135deg,#2f6ff1,#7c3aed)",
+                boxShadow: "0 4px 24px rgba(37,99,235,0.3)",
+              }}
             >
               <Bot size={26} color="#fff" />
             </div>
-            <h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>
+            <h3 style={{ fontSize: "1.15rem", fontWeight: 600, color: "var(--text)", marginBottom: "8px" }}>
               Ask anything about the codebase
             </h3>
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "28px", maxWidth: "420px", lineHeight: 1.6 }}>
               I have read every file. Try one of these to get started:
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full mt-2">
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: "10px",
+              width: "100%",
+              maxWidth: "640px",
+            }}>
               {STARTER_QUESTIONS.map((q) => (
                 <button
                   key={q}
                   onClick={() => handleSubmit(undefined, q)}
-                  className="starter-chip"
                   disabled={streaming}
+                  style={{
+                    textAlign: "left",
+                    padding: "12px 16px",
+                    borderRadius: "12px",
+                    background: "var(--surface-2)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-muted)",
+                    fontSize: "0.84rem",
+                    lineHeight: 1.5,
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    const el = e.currentTarget as HTMLElement;
+                    el.style.background = "var(--surface-3)";
+                    el.style.borderColor = "var(--border-accent)";
+                    el.style.color = "var(--text)";
+                    el.style.transform = "translateY(-2px)";
+                  }}
+                  onMouseLeave={(e) => {
+                    const el = e.currentTarget as HTMLElement;
+                    el.style.background = "var(--surface-2)";
+                    el.style.borderColor = "var(--border)";
+                    el.style.color = "var(--text-muted)";
+                    el.style.transform = "translateY(0)";
+                  }}
                 >
                   {q}
                 </button>
@@ -515,7 +673,18 @@ export default function ChatPanel({
             </div>
           </div>
         ) : (
-          <>
+          /* ── Messages ── */
+          <div
+            style={{
+              maxWidth: "820px",
+              margin: "0 auto",
+              width: "100%",
+              padding: "32px 24px 16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "20px",
+            }}
+          >
             {messages.map((msg) => (
               <MessageBubble
                 key={msg.id}
@@ -535,66 +704,151 @@ export default function ChatPanel({
                 abortSignal={abortControllerRef.current.signal}
               />
             )}
-          </>
-        )}
-        <div ref={messagesEndRef} />
-        <div ref={bottomRef} />
-      </div>
-
-      {/* Input area */}
-      <div className="chat-input-bar">
-        {error && (
-          <div
-            className="flex items-center gap-2 text-sm mb-2 px-3 py-2 rounded-lg"
-            style={{ background: "var(--error-muted)", color: "var(--error)" }}
-          >
-            <AlertTriangle size={13} />
-            {error}
-            <button
-              className="ml-auto text-xs underline"
-              onClick={() => setError(null)}
-            >
-              Dismiss
-            </button>
+            <div ref={messagesEndRef} />
           </div>
         )}
-        <form onSubmit={handleSubmit} className="chat-input-form">
-          <textarea
-            ref={inputRef}
-            id="chat-input"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask a question about the codebase…"
-            disabled={streaming}
-            rows={1}
-            className="chat-textarea"
-            aria-label="Chat input"
-          />
-          {streaming ? (
-            <button
-              type="button"
-              onClick={handleStop}
-              className="chat-send-btn chat-stop-btn"
-              aria-label="Stop generation"
-              title="Stop generation"
+      </div>
+
+      {/* ── Input bar (always at bottom) ─────────────────────── */}
+      <div
+        style={{
+          flexShrink: 0,
+          borderTop: "1px solid var(--border)",
+          background: "var(--surface-2)",
+          padding: "16px 24px 20px",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "820px",
+            margin: "0 auto",
+            width: "100%",
+          }}
+        >
+          {error && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "0.84rem",
+                marginBottom: "10px",
+                padding: "10px 14px",
+                borderRadius: "10px",
+                background: "var(--error-muted)",
+                color: "var(--error)",
+                border: "1px solid rgba(239,68,68,0.2)",
+              }}
             >
-              <Square size={15} strokeWidth={2} />
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={!input.trim()}
-              className="chat-send-btn"
-              aria-label="Send message"
-            >
-              <Send size={15} strokeWidth={2} />
-            </button>
+              <AlertTriangle size={13} />
+              {error}
+              <button
+                style={{ marginLeft: "auto", fontSize: "0.75rem", textDecoration: "underline", background: "none", border: "none", color: "var(--error)", cursor: "pointer" }}
+                onClick={() => setError(null)}
+              >
+                Dismiss
+              </button>
+            </div>
           )}
-        </form>
-        <p className="chat-input-hint">
-          Enter to send · Shift+Enter for new line
-        </p>
+          <form
+            onSubmit={handleSubmit}
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              gap: "10px",
+              padding: "12px 14px",
+              background: "var(--surface-3)",
+              border: "1px solid var(--border)",
+              borderRadius: "16px",
+              transition: "border-color 0.2s, box-shadow 0.2s",
+            }}
+            onFocus={() => {}}
+          >
+            <textarea
+              ref={inputRef}
+              id="chat-input"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask a question about the codebase…"
+              disabled={streaming}
+              rows={1}
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                resize: "none",
+                fontFamily: "var(--font-sans)",
+                fontSize: "0.9rem",
+                color: "var(--text)",
+                lineHeight: 1.6,
+                minHeight: "24px",
+                maxHeight: "160px",
+              }}
+              aria-label="Chat input"
+            />
+            {streaming ? (
+              <button
+                type="button"
+                onClick={handleStop}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  border: "none",
+                  background: "rgba(239, 68, 68, 0.2)",
+                  color: "#f87171",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  transition: "all 0.2s",
+                }}
+                aria-label="Stop generation"
+                title="Stop generation"
+              >
+                <Square size={15} strokeWidth={2} />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  border: "none",
+                  background: input.trim()
+                    ? "linear-gradient(135deg, var(--primary), var(--secondary))"
+                    : "rgba(255,255,255,0.06)",
+                  color: input.trim() ? "#fff" : "var(--text-faint)",
+                  cursor: input.trim() ? "pointer" : "not-allowed",
+                  flexShrink: 0,
+                  transition: "all 0.2s",
+                  boxShadow: input.trim() ? "0 0 14px rgba(59, 130, 246, 0.3)" : "none",
+                }}
+                aria-label="Send message"
+              >
+                <Send size={15} strokeWidth={2} />
+              </button>
+            )}
+          </form>
+          <p
+            style={{
+              fontSize: "0.71rem",
+              color: "var(--text-faint)",
+              marginTop: "8px",
+              textAlign: "center",
+            }}
+          >
+            Enter to send · Shift+Enter for new line
+          </p>
+        </div>
       </div>
     </div>
   );

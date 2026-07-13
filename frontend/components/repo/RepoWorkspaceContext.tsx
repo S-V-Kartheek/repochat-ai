@@ -38,7 +38,7 @@ interface RepoWorkspaceContextValue {
   clearCodeView: () => void;
 }
 
-const RepoWorkspaceContext = createContext<RepoWorkspaceContextValue | null>(
+export const RepoWorkspaceContext = createContext<RepoWorkspaceContextValue | null>(
   null
 );
 

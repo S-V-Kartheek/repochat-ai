@@ -1,16 +1,18 @@
 "use client";
 
-import { FileCode } from "lucide-react";
+import { FileCode, X } from "lucide-react";
 import type { RepoExplorerState } from "@/lib/repoExplorer";
 
 interface CodeViewerPaneProps {
   explorer: RepoExplorerState;
   fileLabel?: string | null;
+  onClose?: () => void;
 }
 
 export default function CodeViewerPane({
   explorer,
   fileLabel,
+  onClose,
 }: CodeViewerPaneProps) {
   const path = fileLabel ?? explorer.selectedFilePath;
 
@@ -49,12 +51,17 @@ export default function CodeViewerPane({
         >
           <FileCode size={13} style={{ color: "var(--accent)" }} />
           <span
-            className="text-xs font-mono truncate"
+            className="text-xs font-mono truncate flex-1"
             style={{ color: "var(--text)" }}
             title={path ?? undefined}
           >
             {path ?? "Unknown path"}
           </span>
+          {onClose && (
+            <button onClick={onClose} className="icon-btn" aria-label="Close code viewer">
+              <X size={14} />
+            </button>
+          )}
         </div>
         <div className="flex-1 overflow-auto p-4">
           <p className="text-sm mb-2" style={{ color: "var(--text-muted)" }}>
@@ -97,18 +104,25 @@ export default function CodeViewerPane({
             {path ?? "citation"}
           </span>
         </div>
-        {hl && (
-          <span
-            className="text-[10px] font-mono px-2 py-0.5 rounded-md flex-shrink-0"
-            style={{
-              background: "#ecf3ff",
-              color: "#1d4ed8",
-              border: "1px solid #cadcff",
-            }}
-          >
-            L{hl.startLine}–{hl.endLine}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {hl && (
+            <span
+              className="text-[10px] font-mono px-2 py-0.5 rounded-md flex-shrink-0"
+              style={{
+                background: "#ecf3ff",
+                color: "#1d4ed8",
+                border: "1px solid #cadcff",
+              }}
+            >
+              L{hl.startLine}–{hl.endLine}
+            </span>
+          )}
+          {onClose && (
+            <button onClick={onClose} className="icon-btn ml-1" aria-label="Close code viewer">
+              <X size={14} />
+            </button>
+          )}
+        </div>
       </div>
       <div
         className="flex-1 overflow-auto font-mono text-[13px] leading-relaxed"
